@@ -368,11 +368,18 @@ function drawMap(){
       .bindTooltip('<b>'+esc(c.nombre)+'</b><br>Score '+c.score+' · '+esc(c.recomendacion)+(c._ancla?'<br><span style="color:#9aa">📍 ancla: '+esc(c._ancla)+' · radio micro: 100 m</span>':''))
       .addTo(layers.clusters);
   });
+  const CALCOLOR = {CONSOLIDADO:'#1A7F37', PERIFERICO:'#B45309', NO_TELCO:'#C0392B'};
   if (layerOn.tex) D.tex.forEach(t=>{
     if (t.lat==null) return;
     const v=((t.ss_mayo||0)+(t.ss_junio||0))/2;
-    const el = L.circleMarker([t.lat,t.lon],{radius:Math.max(3.5,Math.sqrt(v)*0.6),color:'#fff',weight:1,fillColor:t.cerrada?'#C0392B':OPCOLOR.Entel,fillOpacity:.85});
-    el.bindTooltip('<b>'+esc(t.nombre)+'</b><br>'+esc(t.direccion||t.eje||'')+'<br>SS may '+(t.ss_mayo??'—')+' → jun '+(t.ss_junio??'—')+(t.fraude?' ⚠️':'')+(t.cerrada?' · CERRADA':''));
+    const r = Math.max(3.5,Math.sqrt(v)*0.6);
+    // anillo de calidad de microcluster (veredicto Fase 3)
+    if (t.calidad_micro && !t.cerrada){
+      L.circleMarker([t.lat,t.lon],{radius:r+3.5,color:CALCOLOR[t.calidad_micro]||'#9aa',weight:2.2,fill:false,interactive:false}).addTo(layers.tex);
+    }
+    const el = L.circleMarker([t.lat,t.lon],{radius:r,color:'#fff',weight:1,fillColor:t.cerrada?'#C0392B':OPCOLOR.Entel,fillOpacity:.85});
+    el.bindTooltip('<b>'+esc(t.nombre)+'</b><br>'+esc(t.direccion||t.eje||'')+'<br>SS may '+(t.ss_mayo??'—')+' → jun '+(t.ss_junio??'—')+(t.fraude?' ⚠️':'')+(t.cerrada?' · CERRADA':'')+
+      (t.calidad_micro?'<br><b style="color:'+(CALCOLOR[t.calidad_micro]||'#666')+'">Micro: '+esc(t.calidad_micro)+'</b>'+(t.calidad_detalle?'<br><span style="color:#9aa">'+esc(String(t.calidad_detalle).slice(0,90))+'</span>':''):''));
     el.addTo(layers.tex);
   });
   D.operadores.forEach(o=>{
