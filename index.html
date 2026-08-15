@@ -219,7 +219,9 @@ function fijarEnMapa(){
 const ESTADOS = { recibido:'Recibido', evaluacion:'En evaluación', aceptado:'Aceptado', descartado:'Descartado', agencia:'Agencia PBD' };
 const ECOLOR = { recibido:'#8A93A6', evaluacion:'#B45309', aceptado:'#0B6BCB', descartado:'#C0392B', agencia:'#1A7F37' };
 const OPCOLOR = { Movistar:'#009FE3', Claro:'#E30613', Bitel:'#E6B800', Entel:'#FF6B00' };
-const SENALES = [ ['tambo','Tambo',15], ['tinka','La Tinka',15], ['farmacia','InkaFarma/MiFarma',15], ['banco','Banco/agente',15], ['mercado','Mercado',20], ['paradero','Paradero importante',20], ['galeria','Galería comercial',10] ];
+/* Pesos calibrados con venta real de 73 TEX (Fase 2, ago-2026): celulares es el mejor predictor (rho .38);
+   mercado es condicion de entrada, no diferenciador; cadenas no predicen venta telco express. */
+const SENALES = [ ['celulares','Cluster de tiendas de celulares',25], ['galeria','Galería comercial',15], ['tinka','La Tinka/apuestas',15], ['banco','Banco/agente',12], ['farmacia','Farmacia (cadena o particular)',10], ['mercado','Mercado',10], ['paradero','Paradero importante',8], ['tambo','Tambo/Mass/OXXO/3A',5] ];
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.style.opacity=1; setTimeout(()=>t.style.opacity=0, 2600); }
