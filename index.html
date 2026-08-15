@@ -210,6 +210,69 @@ let layerOn = { locales:true, clusters:true, tex:false };
 let opOn = { Movistar:false, Claro:false, Bitel:false, Entel:false };
 let pickingCoord = false;
 let pickLocalId = null;
+let gmapsReady = false, GKEY = '';
+/* ---- analisis de entorno con AI (cosecha Places en el navegador + Edge Function con Haiku) ---- */
+const RAW_CATS = [
+  {id:'banco',type:'bank'},{id:'farmacia',type:'pharmacy'},{id:'conveniencia',type:'convenience_store'},
+  {id:'supermercado',type:'supermarket'},{id:'mercado',kw:'mercado'},{id:'tinka',kw:'tinka'},
+  {id:'apuestas',kw:'apuestas'},{id:'paradero',type:'transit_station'},{id:'celulares',kw:'celulares'},
+  {id:'galeria',kw:'galeria comercial'},{id:'comida',type:'restaurant'},{id:'repuestos',kw:'repuestos'},{id:'ferreteria',kw:'ferreteria'}];
+const MARCAS_AI = { farm_cadena:['inkafarma','inka farma','mifarma','mi farma','boticas y salud','boticas peru','boticas perú','farmacias peruanas','universal'],
+  conv_cadena:['tambo','mass','oxxo','listo','3a'] };
+function loadGmapsApp(){
+  return new Promise((res,rej)=>{
+    if (gmapsReady) return res();
+    if (!GKEY){ rej('Falta la API key de Google (configúrala en analisis.html).'); return; }
+    const s=document.createElement('script');
+    s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(String(GKEY).replace(/"/g,''))+'&libraries=places&language=es&region=PE';
+    s.onload=()=>{gmapsReady=true;res();}; s.onerror=()=>rej('No cargó Google Maps (revisa la key).');
+    document.head.appendChild(s);
+  });
+}
+async function harvestLocal(lc){
+  const svc = new google.maps.places.PlacesService(document.createElement('div'));
+  const crudo = {};
+  for (const cat of RAW_CATS){
+    const r = await new Promise(res=>{
+      const req={location:new google.maps.LatLng(lc.lat,lc.lon),radius:250};
+      if(cat.type)req.type=cat.type; else req.keyword=cat.kw;
+      svc.nearbySearch(req,(results,status)=>res(status==='OK'?results:(status==='ZERO_RESULTS'?[]:null)));
+    });
+    if (r===null){ await new Promise(s=>setTimeout(s,2200)); continue; }
+    crudo[cat.id]=r.map(x=>({n:x.name,rating:x.rating||null,reviews:x.user_ratings_total||0,
+      d:Math.round(distKm(lc.lat,lc.lon,x.geometry.location.lat(),x.geometry.location.lng())*1000),
+      tipos:(x.types||[]).slice(0,3)})).filter(x=>x.d<=260).sort((a,b)=>a.d-b.d).slice(0,20);
+    await new Promise(s=>setTimeout(s,220));
+  }
+  const esM=(n,l)=>l.some(m=>(n||'').toLowerCase().includes(m));
+  const det={};
+  const push=(c,it)=>{(det[c]=det[c]||[]).push(it);};
+  for (const [cat,items] of Object.entries(crudo)) for (const it of items){
+    if(cat==='farmacia') push(esM(it.n,MARCAS_AI.farm_cadena)?'farm_cadena':'farm_indep',it);
+    else if(cat==='conveniencia') push(esM(it.n,MARCAS_AI.conv_cadena)?'conv_cadena':'conv_bodega',it);
+    else if(cat==='tinka'||cat==='apuestas') push('apuestas',it);
+    else push(cat,it);
+  }
+  if(det.apuestas){const s=new Set();det.apuestas=det.apuestas.filter(x=>{const k=x.n+'|'+x.d;if(s.has(k))return false;s.add(k);return true;});}
+  await sb.from('micro_entorno').upsert({punto_tipo:'local',punto_id:String(lc.id),nombre:'[LOCAL] '+lc.nombre,
+    lat:lc.lat,lon:lc.lon,resumen:{},data:det,harvested_by:me.email,updated_at:new Date().toISOString()},{onConflict:'punto_tipo,punto_id'});
+}
+async function analizarEntorno(){
+  const lc = selLocal;
+  if (lc.lat==null){ toast('Primero fija la ubicación del local'); return; }
+  if (DEMO){ lc._clasif={calidad:'CONSOLIDADO',confianza:'MEDIA',racional:'(demo) Entorno popular con cluster telco.',perimetro:'Cuadra del mercado, ambas veredas'}; renderPanel(); return; }
+  try{
+    toast('1/3 · Cosechando entorno en Google Places (~30 s)…');
+    await loadGmapsApp();
+    await harvestLocal(lc);
+    toast('2/3 · Analizando con AI…');
+    const { data, error } = await sb.functions.invoke('analizar-entorno', {body:{punto_tipo:'local', punto_id:String(lc.id)}});
+    if (error){ toast('Error del análisis: '+(error.message||error)); return; }
+    if (data && data.error){ toast('Error: '+data.error); return; }
+    lc._clasif = data;
+    toast('3/3 · Análisis listo'); renderPanel();
+  }catch(e){ toast(String(e)); }
+}
 function fijarEnMapa(){
   pickLocalId = selLocal.id;
   document.getElementById('map').style.cursor='crosshair';
@@ -294,6 +357,7 @@ async function loadAll(){
   D.clusters=c.data||[]; D.tex=t.data||[]; D.operadores=o.data||[]; D.locales=l.data||[];
   if (cfg.data) D.pesos = cfg.data.value;
   alignClusters();
+  sb.from('app_config').select('value').eq('key','google_maps_key').maybeSingle().then(({data})=>{ if(data&&data.value&&String(data.value).length>10) GKEY=data.value; });
 }
 /* Ancla cada microcluster a su MEJOR tienda TEX (posicion viva: sigue las recalibraciones),
    con respaldo en el centroide de sus tiendas vigentes. */
@@ -445,12 +509,14 @@ async function openDetail(id){
   const lc = D.locales.find(x=>String(x.id)===String(id)); if(!lc) return;
   selLocal = lc;
   if (!DEMO){
-    const [m,e,t] = await Promise.all([
+    const [m,e,t,me2] = await Promise.all([
       sb.from('local_media').select('*').eq('local_id', lc.id),
       sb.from('local_eventos').select('*').eq('local_id', lc.id).order('created_at'),
-      sb.from('trafico').select('*').eq('local_id', lc.id).order('fecha')
+      sb.from('trafico').select('*').eq('local_id', lc.id).order('fecha'),
+      sb.from('micro_entorno').select('clasificacion').eq('punto_tipo','local').eq('punto_id', String(lc.id)).maybeSingle()
     ]);
     lc._media=m.data||[]; lc._eventos=e.data||[]; lc._trafico=t.data||[];
+    if (me2.data && me2.data.clasificacion) lc._clasif = me2.data.clasificacion;
   }
   lc._media = lc._media||[]; lc._eventos = lc._eventos||[]; lc._trafico = lc._trafico||[];
   renderPanel(); drawMap();
@@ -478,6 +544,12 @@ function renderDetail(pb){
     '<span class="badge" style="background:'+ECOLOR[lc.estado]+'">'+ESTADOS[lc.estado]+'</span> '+
     '<span class="muted">'+esc(lc.distrito||'')+(lc.cluster_nombre?' · '+esc(lc.cluster_nombre)+(lc._dist_ancla_m!=null?' (a '+lc._dist_ancla_m+' m del ancla'+(lc._dist_ancla_m<=100?' — dentro del microcluster ✓':'')+')':''):'')+'</span>'+
     (lc.lat==null?'<div style="background:#FDF2F1;border:1px solid #EAC2BC;border-radius:8px;padding:8px 10px;margin-top:8px;font-size:12.5px;color:#8E2F23"><b>📍 Este local no tiene ubicación</b>, por eso no aparece en el mapa. Fíjala con el botón de abajo (clic en el mapa), o con "Editar datos" pegando el link/coordenada de Google Maps.<div class="btnrow"><button class="btn" onclick="fijarEnMapa()">📍 Fijar haciendo clic en el mapa</button></div></div>':'')+
+    (lc._clasif?'<div style="border:1.5px solid '+({CONSOLIDADO:'#1A7F37',PERIFERICO:'#B45309',NO_TELCO:'#C0392B'}[lc._clasif.calidad]||'#9aa')+';border-radius:10px;padding:9px 11px;margin-top:10px;font-size:12.5px">'+
+      '<b style="color:'+({CONSOLIDADO:'#1A7F37',PERIFERICO:'#B45309',NO_TELCO:'#C0392B'}[lc._clasif.calidad]||'#666')+'">🧠 Micro: '+esc(lc._clasif.calidad)+'</b> <span class="muted">confianza '+esc(lc._clasif.confianza||'')+(lc._clasif.fecha?' · '+esc(lc._clasif.fecha):'')+'</span>'+
+      (lc._clasif.perimetro?'<div><b>Perímetro:</b> '+esc(lc._clasif.perimetro)+'</div>':'')+
+      (lc._clasif.micro_real_cercano?'<div><b>Micro real cercano:</b> '+esc(lc._clasif.micro_real_cercano)+'</div>':'')+
+      (lc._clasif.racional?'<div class="muted">'+esc(lc._clasif.racional)+'</div>':'')+
+      '</div>':'')+
     '<div class="scorebox"><div style="display:flex;align-items:baseline;gap:10px"><span class="big">'+(sc.total!=null?sc.total:'—')+'</span><span class="muted">score /100 · pesos: '+pesosStr()+'</span></div>'+
       sc.rows.map(r=>'<div class="sbar"><span style="width:118px">'+r[0]+'</span><span class="tr"><i style="width:'+r[1]+'%"></i></span><span style="width:30px;text-align:right">'+r[1]+'</span></div>').join('')+
     '</div>'+
@@ -499,6 +571,7 @@ function renderDetail(pb){
     '<dt>Historial</dt><dd>'+(evts||'<span class="muted">Sin eventos.</span>')+'</dd>'+
     '</dl>'+
     '<div class="btnrow" style="margin-top:14px"><button class="btn primary" onclick="openEditar()">✎ Editar datos</button>'+
+    '<button class="btn" onclick="analizarEntorno()">🧠 '+(lc._clasif?'Re-analizar entorno':'Analizar entorno (AI)')+'</button>'+
     '<button class="btn accent" onclick="genFicha()">📄 Generar ficha KAM (PDF)</button>'+
     (myRol==='admin'?'<button class="btn danger" onclick="delLocal()">Eliminar</button>':'<span class="muted" style="align-self:center">eliminar: solo admin</span>')+'</div>'+
     '</div>';
