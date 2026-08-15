@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GridRetail · Gestor de Locales</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
+<script src="vendor/leaflet.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+:root{
+  --navy:#0E1F3D; --navy2:#16294F; --accent:#00B3A4; --bg:#F5F7FA; --surface:#FFF;
+  --ink:#1A2233; --ink2:#5A6478; --ink3:#8A93A6; --line:#E3E7EE;
+  --recibido:#8A93A6; --evaluacion:#B45309; --aceptado:#0B6BCB; --descartado:#C0392B; --agencia:#1A7F37;
+  --mov:#009FE3; --claro:#E30613; --bitel:#E6B800; --entel:#FF6B00;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:14px}
+button{cursor:pointer;font-family:inherit}
+input,select,textarea{font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;background:#fff}
+label{font-size:11px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em;display:block;margin:10px 0 3px}
+/* header */
+header{background:var(--navy);color:#fff;display:flex;align-items:center;gap:14px;padding:0 16px;height:52px;flex:none}
+.brand{font-size:18px;font-weight:300;letter-spacing:.02em}
+.brand b{font-weight:800;color:var(--accent)}
+.brand small{font-size:10.5px;color:#93A3C4;display:block;margin-top:-3px;letter-spacing:.12em}
+header .sp{flex:1}
+.hbtn{background:var(--navy2);border:1px solid #27407512;color:#D7E0F2;border-radius:8px;padding:7px 12px;font-size:12.5px}
+.hbtn.primary{background:var(--accent);color:#04302C;font-weight:700;border:none}
+#userchip{font-size:12px;color:#93A3C4}
+/* chips bar */
+#chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--line);align-items:center;flex:none}
+.chip{font-size:12px;padding:4px 10px;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--ink2);user-select:none;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.chip .sw{width:9px;height:9px;border-radius:50%}
+.chip.on{color:#fff;border-color:transparent;background:var(--navy)}
+.chip.on .sw{outline:1.5px solid #fff}
+.sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+/* layout */
+#main{flex:1;display:flex;min-height:0}
+#mapwrap{flex:1;position:relative}
+#map{width:100%;height:100%;background:#E8EDF3}
+#panel{width:400px;background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line);flex:none}
+.tab{flex:1;text-align:center;padding:10px;font-size:12.5px;font-weight:600;color:var(--ink3);cursor:pointer;border-bottom:2px solid transparent}
+.tab.on{color:var(--navy);border-bottom-color:var(--accent)}
+#panelbody{flex:1;overflow-y:auto;min-height:0}
+/* rows */
+.row{padding:9px 12px;border-bottom:1px solid #F0F2F6;cursor:pointer;display:flex;gap:9px;align-items:flex-start}
+.row:hover{background:#F5F8FC}
+.dot{width:10px;height:10px;border-radius:50%;margin-top:4px;flex:none}
+.row .nm{font-size:13px;font-weight:600;line-height:1.3}
+.row .meta{font-size:11.5px;color:var(--ink2);margin-top:1px}
+.badge{display:inline-block;font-size:10px;font-weight:700;color:#fff;border-radius:4px;padding:1px 6px;letter-spacing:.03em}
+.count{font-size:11px;color:var(--ink3);background:#EEF1F6;border-radius:10px;padding:1px 7px;margin-left:5px}
+/* detail */
+#detail{padding:14px;font-size:13px;line-height:1.5}
+#detail h3{font-size:15px}
+#detail dt{font-weight:700;color:var(--ink2);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;margin-top:10px}
+#detail dd{margin:2px 0 0}
+.btnrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 11px;font-size:12.5px;color:var(--ink)}
+.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+.btn.accent{background:var(--accent);color:#04302C;border-color:var(--accent);font-weight:700}
+.btn.danger{color:#C0392B;border-color:#EAC2BC}
+.thumb{width:74px;height:74px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer}
+.gallery{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.scorebox{background:#F2F7F6;border:1px solid #D5E8E5;border-radius:10px;padding:10px 12px;margin-top:10px}
+.scorebox .big{font-size:26px;font-weight:800;color:var(--navy)}
+.sbar{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink2);margin-top:4px}
+.sbar .tr{flex:1;height:5px;background:#E2EAE8;border-radius:3px;overflow:hidden}
+.sbar .tr i{display:block;height:100%;background:var(--accent);border-radius:3px}
+table.mini{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+table.mini th{text-align:left;color:var(--ink3);font-size:10.5px;text-transform:uppercase;padding:3px 6px;border-bottom:1px solid var(--line)}
+table.mini td{padding:4px 6px;border-bottom:1px solid #F0F2F6}
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(10,20,40,.45);display:none;align-items:center;justify-content:center;z-index:2000}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:14px;width:min(680px,94vw);max-height:92vh;overflow-y:auto;padding:20px 22px;box-shadow:0 10px 40px rgba(10,20,40,.3)}
+.modal h2{font-size:16px;margin-bottom:4px}
+.modal .sub{font-size:12px;color:var(--ink2);margin-bottom:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0 10px}
+.checks{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.checks label{display:inline-flex;align-items:center;gap:5px;font-size:12px;text-transform:none;letter-spacing:0;font-weight:500;border:1px solid var(--line);border-radius:8px;padding:6px 9px;margin:0;cursor:pointer;color:var(--ink)}
+.checks input{width:auto}
+.checks label.sel{background:#EAF6F4;border-color:var(--accent)}
+/* login */
+#login{position:fixed;inset:0;background:var(--navy);display:flex;align-items:center;justify-content:center;z-index:3000}
+#login .card{background:#fff;border-radius:16px;padding:34px 36px;width:min(400px,92vw)}
+#login .brand{color:var(--navy);font-size:26px}
+#login .brand small{color:var(--ink3)}
+#loginmsg{font-size:12.5px;color:#C0392B;margin-top:8px;min-height:16px}
+#setupwarn{background:#FFF6E5;border:1px solid #F2DCA8;color:#7A5B0F;border-radius:10px;padding:10px 12px;font-size:12.5px;margin-top:12px;display:none}
+.muted{color:var(--ink3);font-size:11.5px}
+.leaflet-container{font:inherit}
+.opicon{width:20px;height:20px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#111826;color:#fff;font-size:13px;padding:9px 16px;border-radius:9px;opacity:0;transition:.25s;z-index:4000;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="card">
+    <div class="brand">Grid<b>Retail</b><small>GRIDTEL · GESTOR DE LOCALES</small></div>
+    <label>Correo</label><input id="lemail" type="email" autocomplete="username">
+    <label>Contraseña</label><input id="lpass" type="password" autocomplete="current-password">
+    <div style="margin-top:14px"><button class="btn primary" style="width:100%;padding:10px" onclick="doLogin()">Ingresar</button></div>
+    <div id="loginmsg"></div>
+    <div id="setupwarn">⚠️ La app aún no está conectada: falta completar <b>config.js</b> con la URL y anon key de Supabase. Puedes probar la interfaz en <a href="?demo=1">modo demo</a>.</div>
+  </div>
+</div>
+
+<header style="display:none" id="hdr">
+  <div class="brand">Grid<b>Retail</b><small>GRIDTEL</small></div>
+  <button class="hbtn primary" onclick="openNuevo()">＋ Nuevo local</button>
+  <div class="sp"></div>
+  <span id="userchip"></span>
+  <button class="hbtn" id="btncfg" style="display:none" onclick="openPesos()">Pesos scoring</button>
+  <button class="hbtn" onclick="logout()">Salir</button>
+</header>
+
+<div id="chips" style="display:none">
+  <span style="font-size:11px;color:var(--ink3);font-weight:700">CAPAS:</span>
+  <span class="chip on" data-layer="locales"><span class="sw" style="background:var(--accent)"></span>Locales</span>
+  <span class="chip on" data-layer="clusters"><span class="sw" style="background:#0B6BCB"></span>Microclusters</span>
+  <span class="chip" data-layer="tex"><span class="sw" style="background:var(--entel)"></span>Entel TEX</span>
+  <span class="sep"></span>
+  <span style="font-size:11px;color:var(--ink3);font-weight:700">OPERADORES:</span>
+  <span class="chip" data-op="Movistar"><span class="sw" style="background:var(--mov)"></span>Movistar</span>
+  <span class="chip" data-op="Claro"><span class="sw" style="background:var(--claro)"></span>Claro</span>
+  <span class="chip" data-op="Bitel"><span class="sw" style="background:var(--bitel)"></span>Bitel</span>
+  <span class="chip" data-op="Entel"><span class="sw" style="background:var(--entel)"></span>Entel</span>
+</div>
+
+<div id="main" style="display:none">
+  <div id="mapwrap"><div id="map"></div></div>
+  <div id="panel">
+    <div class="tabs">
+      <div class="tab on" data-tab="locales" onclick="setTab('locales')">Locales <span class="count" id="cntlocales">0</span></div>
+      <div class="tab" data-tab="zonas" onclick="setTab('zonas')">Zonas</div>
+    </div>
+    <div id="panelbody"></div>
+  </div>
+</div>
+
+<!-- Modal: nuevo/editar local -->
+<div class="modal-bg" id="mNuevo"><div class="modal">
+  <h2 id="mNuevoTitle">Nuevo local</h2>
+  <div class="sub">Pega el mensaje de la corredora y GridRetail extrae lo que pueda; completa el resto.</div>
+  <label>Mensaje de WhatsApp (opcional)</label>
+  <textarea id="f_wsp" rows="4" placeholder="Pega aquí el mensaje tal como llegó…"></textarea>
+  <div class="btnrow"><button class="btn" onclick="parseWsp()">⚡ Extraer datos del mensaje</button><span class="muted" id="wspmsg"></span></div>
+  <div class="grid2">
+    <div><label>Nombre corto *</label><input id="f_nombre" placeholder="Ej: Local Av. Huandoy cdra 50"></div>
+    <div><label>Distrito</label><input id="f_distrito"></div>
+  </div>
+  <label>Dirección</label><input id="f_direccion">
+  <label>Link de ubicación (Google Maps)</label><input id="f_link" placeholder="https://maps.app.goo.gl/…">
+  <div class="grid2">
+    <div><label>Lat</label><input id="f_lat" type="number" step="any" placeholder="-12.0…"></div>
+    <div><label>Lon</label><input id="f_lon" type="number" step="any" placeholder="-77.0…"></div>
+  </div>
+  <div class="muted" style="margin-top:4px">Tip: también puedes hacer clic en el mapa con este formulario abierto para fijar la ubicación.</div>
+  <label>Descripción / características</label><textarea id="f_desc" rows="3"></textarea>
+  <div class="grid4">
+    <div><label>Área m²</label><input id="f_area" type="number" step="any"></div>
+    <div><label>Renta S//mes</label><input id="f_precio" type="number" step="any"></div>
+    <div><label>Garantía S/</label><input id="f_garantia" type="number" step="any"></div>
+    <div><label>Plazo (meses)</label><input id="f_plazo" type="number"></div>
+  </div>
+  <div class="grid2">
+    <div><label>Adelanto (meses)</label><input id="f_adelanto" type="number" step="any"></div>
+    <div><label>Corredora / contacto</label><input id="f_corredora" placeholder="Nombre · 9XXXXXXXX"></div>
+  </div>
+  <div class="btnrow" style="margin-top:16px">
+    <button class="btn accent" onclick="saveNuevo()">Guardar local</button>
+    <button class="btn" onclick="closeModal('mNuevo')">Cancelar</button>
+  </div>
+</div></div>
+
+<!-- Modal: pesos scoring (admin) -->
+<div class="modal-bg" id="mPesos"><div class="modal" style="width:min(430px,94vw)">
+  <h2>Pesos del scoring</h2>
+  <div class="sub">Deben sumar 100. Solo admin.</div>
+  <div class="grid2">
+    <div><label>Entorno TEX/cluster</label><input id="p_entorno" type="number"></div>
+    <div><label>Tráfico medido</label><input id="p_trafico" type="number"></div>
+    <div><label>Señales comerciales</label><input id="p_senales" type="number"></div>
+    <div><label>Operadores cercanos</label><input id="p_operadores" type="number"></div>
+    <div><label>Condiciones económicas</label><input id="p_condiciones" type="number"></div>
+  </div>
+  <div class="btnrow" style="margin-top:14px">
+    <button class="btn accent" onclick="savePesos()">Guardar</button>
+    <button class="btn" onclick="closeModal('mPesos')">Cancelar</button>
+  </div>
+</div></div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ================= CONFIG / ESTADO GLOBAL ================= */
+const CFG = window.GRIDRETAIL_CONFIG || {};
+const DEMO = new URLSearchParams(location.search).has('demo');
+let sb = null, me = null, myRol = 'editor';
+let D = { clusters:[], tex:[], operadores:[], locales:[], pesos:{entorno:30,trafico:25,senales:20,operadores:15,condiciones:10} };
+let map, layers = {}, selLocal = null, tab = 'locales';
+let layerOn = { locales:true, clusters:true, tex:false };
+let opOn = { Movistar:false, Claro:false, Bitel:false, Entel:false };
+let pickingCoord = false;
+
+const ESTADOS = { recibido:'Recibido', evaluacion:'En evaluación', aceptado:'Aceptado', descartado:'Descartado', agencia:'Agencia PBD' };
+const ECOLOR = { recibido:'#8A93A6', evaluacion:'#B45309', aceptado:'#0B6BCB', descartado:'#C0392B', agencia:'#1A7F37' };
+const OPCOLOR = { Movistar:'#009FE3', Claro:'#E30613', Bitel:'#E6B800', Entel:'#FF6B00' };
+const SENALES = [ ['tambo','Tambo',15], ['tinka','La Tinka',15], ['farmacia','InkaFarma/MiFarma',15], ['banco','Banco/agente',15], ['mercado','Mercado',20], ['paradero','Paradero importante',20], ['galeria','Galería comercial',10] ];
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.style.opacity=1; setTimeout(()=>t.style.opacity=0, 2600); }
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); pickingCoord=false; }
+function fmtS(n){ return n==null?'—':'S/ '+Number(n).toLocaleString('es-PE'); }
+function distKm(a,b,c,d){ const x=(a-c)*111, y=(b-d)*111*Math.cos(-12*Math.PI/180); return Math.sqrt(x*x+y*y); }
+
+/* ================= DEMO DATA (solo para probar la interfaz) ================= */
+const DEMO_DATA = {
+  clusters:[
+    {nombre:'Huandoy - Pro (Los Olivos)', macrozona:'Lima Norte', recomendacion:'ABRIR PRIORITARIO', fase_sugerida:'sep 2026', racional:'Demo', score:88.7, ss_mejor:209.5, sat_movistar:'SIN DATA', sat_claro:'SIN DATA', renta_rango:'1800-3200', renta_m2:'45-70', renta_confianza:'MEDIA', evidencia:'(demo)', lat:-11.955, lon:-77.078},
+    {nombre:'Naranjal - Panamericana (Independencia)', macrozona:'Lima Norte', recomendacion:'ABRIR PRIORITARIO', fase_sugerida:'sep 2026', racional:'Demo', score:91.4, ss_mejor:226.5, sat_movistar:'SIN DATA', sat_claro:'SIN DATA', renta_rango:'1800-3500', renta_m2:'40-70', renta_confianza:'ALTA', evidencia:'(demo)', lat:-11.981, lon:-77.057}
+  ],
+  tex:[
+    {nombre:'TE HUANDOY (demo)', distrito:'Los Olivos', eje:'Av. Proceres de Huandoy', direccion:'Av. Próceres de Huandoy 5004', lat:-11.9763, lon:-77.0832, ss_mayo:249, ss_junio:170, fraude:false, modulo:false, cerrada:false, confianza:'ALTA', cluster_nombre:'Huandoy - Pro (Los Olivos)'},
+    {nombre:'TE NARANJAL (demo)', distrito:'Independencia', eje:'Av. Contisuyo 572', direccion:'Av. Contisuyo 572', lat:-11.9806, lon:-77.0585, ss_mayo:235, ss_junio:218, fraude:false, modulo:false, cerrada:false, confianza:'ALTA', cluster_nombre:'Naranjal - Panamericana (Independencia)'}
+  ],
+  operadores:[
+    {operador:'Movistar', tipo:'CAC', nombre:'Movistar Megaplaza (demo)', direccion:'Av. Mendiola 3698', distrito:'Independencia', lat:-11.9946, lon:-77.0610, activo:true},
+    {operador:'Claro', tipo:'CAC', nombre:'CAC Plaza Norte (demo)', direccion:'Av. Mendiola 1400', distrito:'Independencia', lat:-12.0064, lon:-77.0580, activo:true},
+    {operador:'Bitel', tipo:'tienda', nombre:'Bitel Belaunde (demo)', direccion:'Av. Belaúnde Oeste 130', distrito:'Comas', lat:-11.948, lon:-77.05, activo:true}
+  ],
+  locales:[
+    {id:'demo-1', estado:'evaluacion', nombre:'Local Av. Huandoy cdra 50 (demo)', direccion:'Av. Próceres de Huandoy 5010', distrito:'Los Olivos', lat:-11.9760, lon:-77.0830, precio_soles:2800, garantia_soles:5600, adelanto_meses:1, plazo_meses:36, area_m2:42, corredora:'Corredora demo · 999999999', descripcion:'Frente comercial 6m, baño, mezzanine.', senales:{mercado:true,paradero:true}, operadores_cerca:{Entel:true}, score:null, created_at:new Date().toISOString(), _media:[], _eventos:[], _trafico:[{fecha:'2026-08-12',franja:'18:00-19:00',conteo:210,minutos:15,medido_por:'demo'}]}
+  ]
+};
+
+/* ================= ARRANQUE ================= */
+async function boot(){
+  if (DEMO){
+    document.getElementById('login').style.display='none';
+    me = {email:'demo@gridretail'}; myRol='admin';
+    D.clusters=DEMO_DATA.clusters; D.tex=DEMO_DATA.tex; D.operadores=DEMO_DATA.operadores; D.locales=DEMO_DATA.locales;
+    startApp(); return;
+  }
+  if (!CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY){
+    document.getElementById('setupwarn').style.display='block'; return;
+  }
+  sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+  const { data:{ session } } = await sb.auth.getSession();
+  if (session){ me = session.user; await afterLogin(); }
+}
+async function doLogin(){
+  if (DEMO) return;
+  if (!sb){ document.getElementById('setupwarn').style.display='block'; return; }
+  const email=document.getElementById('lemail').value.trim(), pass=document.getElementById('lpass').value;
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error){ document.getElementById('loginmsg').textContent = 'No se pudo ingresar: '+error.message; return; }
+  me = data.user; await afterLogin();
+}
+async function logout(){ if(sb) await sb.auth.signOut(); location.reload(); }
+async function afterLogin(){
+  document.getElementById('login').style.display='none';
+  const { data: prof } = await sb.from('profiles').select('*').eq('id', me.id).single();
+  myRol = (prof && prof.rol) || 'editor';
+  await loadAll();
+  startApp();
+}
+async function loadAll(){
+  const [c,t,o,l,cfg] = await Promise.all([
+    sb.from('clusters').select('*').order('score',{ascending:false}),
+    sb.from('tiendas_tex').select('*'),
+    sb.from('operadores').select('*').eq('activo', true),
+    sb.from('locales').select('*').order('created_at',{ascending:false}),
+    sb.from('app_config').select('*').eq('key','pesos_scoring').single()
+  ]);
+  D.clusters=c.data||[]; D.tex=t.data||[]; D.operadores=o.data||[]; D.locales=l.data||[];
+  if (cfg.data) D.pesos = cfg.data.value;
+}
+function startApp(){
+  document.getElementById('hdr').style.display='flex';
+  document.getElementById('chips').style.display='flex';
+  document.getElementById('main').style.display='flex';
+  document.getElementById('userchip').textContent = (me.email||'') + (myRol==='admin' ? ' · admin' : '');
+  if (myRol==='admin') document.getElementById('btncfg').style.display='inline-block';
+  initMap(); renderAll();
+}
+
+/* ================= MAPA ================= */
+function initMap(){
+  map = L.map('map', {zoomControl:true, minZoom:8, maxZoom:19});
+  map.attributionControl.setPrefix(false);
+  map.fitBounds([[-12.33,-77.22],[-11.72,-76.62]]);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+  fetch('data/distritos.json').then(r=>r.json()).then(gj=>{
+    L.geoJSON(gj, {style:{color:'#8A96AC',weight:0.8,dashArray:'3 3',fillOpacity:0.02,interactive:false}}).addTo(map);
+  }).catch(()=>{});
+  layers.locales = L.layerGroup().addTo(map);
+  layers.clusters = L.layerGroup().addTo(map);
+  layers.tex = L.layerGroup();
+  layers.ops = L.layerGroup().addTo(map);
+  map.on('click', e=>{
+    if (pickingCoord){
+      document.getElementById('f_lat').value = e.latlng.lat.toFixed(6);
+      document.getElementById('f_lon').value = e.latlng.lng.toFixed(6);
+      toast('Ubicación fijada desde el mapa');
+    }
+  });
+}
+function renderAll(){ drawMap(); renderPanel(); }
+function drawMap(){
+  layers.locales.clearLayers(); layers.clusters.clearLayers(); layers.tex.clearLayers(); layers.ops.clearLayers();
+  if (layerOn.clusters) D.clusters.forEach(c=>{
+    if (c.lat==null) return;
+    const r = Math.max(7, Math.sqrt(Math.max(c.score||1,1))*1.4);
+    L.circleMarker([c.lat,c.lon],{radius:r,color:'#fff',weight:1.4,fillColor:recColor(c.recomendacion),fillOpacity:.55})
+      .bindTooltip('<b>'+esc(c.nombre)+'</b><br>Score '+c.score+' · '+esc(c.recomendacion))
+      .addTo(layers.clusters);
+  });
+  if (layerOn.tex) D.tex.forEach(t=>{
+    if (t.lat==null) return;
+    const v=((t.ss_mayo||0)+(t.ss_junio||0))/2;
+    const el = L.circleMarker([t.lat,t.lon],{radius:Math.max(3.5,Math.sqrt(v)*0.6),color:'#fff',weight:1,fillColor:t.cerrada?'#C0392B':OPCOLOR.Entel,fillOpacity:.85});
+    el.bindTooltip('<b>'+esc(t.nombre)+'</b><br>'+esc(t.direccion||t.eje||'')+'<br>SS may '+(t.ss_mayo??'—')+' → jun '+(t.ss_junio??'—')+(t.fraude?' ⚠️':'')+(t.cerrada?' · CERRADA':''));
+    el.addTo(layers.tex);
+  });
+  D.operadores.forEach(o=>{
+    if (!opOn[o.operador] || o.lat==null) return;
+    const ic = L.divIcon({className:'', html:'<div class="opicon" style="background:'+OPCOLOR[o.operador]+'">'+o.operador[0]+'</div>', iconSize:[20,20], iconAnchor:[10,10]});
+    L.marker([o.lat,o.lon],{icon:ic})
+      .bindTooltip('<b>'+esc(o.nombre)+'</b><br>'+esc(o.tipo||'')+' · '+esc(o.direccion||'')+'<br><span style="color:#9aa">'+esc(o.confianza||'')+'</span>')
+      .addTo(layers.ops);
+  });
+  if (layerOn.locales) D.locales.forEach(lc=>{
+    if (lc.lat==null) return;
+    const sel = selLocal && selLocal.id===lc.id;
+    const mk = L.circleMarker([lc.lat,lc.lon],{radius:sel?12:9,color:sel?'#111':'#fff',weight:sel?2.5:2,fillColor:ECOLOR[lc.estado],fillOpacity:.95});
+    mk.bindTooltip('<b>'+esc(lc.nombre)+'</b><br>'+ESTADOS[lc.estado]+(lc.score!=null?' · score '+lc.score:''));
+    mk.on('click', ()=>openDetail(lc.id));
+    mk.addTo(layers.locales);
+  });
+  if (layerOn.locales){ if(!map.hasLayer(layers.locales)) layers.locales.addTo(map); } else map.removeLayer(layers.locales);
+  if (layerOn.clusters){ if(!map.hasLayer(layers.clusters)) layers.clusters.addTo(map); } else map.removeLayer(layers.clusters);
+  if (layerOn.tex){ if(!map.hasLayer(layers.tex)) layers.tex.addTo(map); } else map.removeLayer(layers.tex);
+}
+function recColor(r){ return r==='ABRIR PRIORITARIO'?'#1A7F37':(r==='ABRIR'?'#0B6BCB':(r==='EVALUAR EN CAMPO'?'#B45309':'#98A1B3')); }
+
+/* chips */
+document.addEventListener('click', e=>{
+  const ch = e.target.closest('.chip'); if(!ch) return;
+  if (ch.dataset.layer){ layerOn[ch.dataset.layer]=!layerOn[ch.dataset.layer]; ch.classList.toggle('on'); drawMap(); }
+  if (ch.dataset.op){ opOn[ch.dataset.op]=!opOn[ch.dataset.op]; ch.classList.toggle('on'); drawMap(); }
+});
+
+/* ================= PANEL ================= */
+function setTab(t){ tab=t; selLocal=null; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.dataset.tab===t)); renderPanel(); drawMap(); }
+function renderPanel(){
+  const pb = document.getElementById('panelbody');
+  document.getElementById('cntlocales').textContent = D.locales.length;
+  if (selLocal){ renderDetail(pb); return; }
+  if (tab==='zonas'){
+    pb.innerHTML = D.clusters.map(c=>
+      '<div class="row"><span class="dot" style="background:'+recColor(c.recomendacion)+'"></span><div>'+
+      '<div class="nm">'+esc(c.nombre)+'</div>'+
+      '<div class="meta">'+esc(c.macrozona||'')+' · score '+(c.score??'—')+' · renta S/'+esc(c.renta_rango||'—')+'</div>'+
+      '<div class="meta">'+esc(c.fase_sugerida||'')+'</div></div></div>'
+    ).join('') || '<div style="padding:16px" class="muted">Sin datos de zonas (carga el seed en Supabase).</div>';
+    return;
+  }
+  // pipeline agrupado por estado
+  let h='';
+  for (const est of ['recibido','evaluacion','aceptado','agencia','descartado']){
+    const items = D.locales.filter(l=>l.estado===est);
+    h += '<div style="padding:9px 12px 3px;font-size:11px;font-weight:800;color:'+ECOLOR[est]+';letter-spacing:.05em;text-transform:uppercase">'+ESTADOS[est]+' <span class="count">'+items.length+'</span></div>';
+    h += items.map(lc=>
+      '<div class="row" onclick="openDetail(\''+lc.id+'\')"><span class="dot" style="background:'+ECOLOR[est]+'"></span><div style="flex:1">'+
+      '<div class="nm">'+esc(lc.nombre)+'</div>'+
+      '<div class="meta">'+esc(lc.distrito||'')+' · '+fmtS(lc.precio_soles)+'/mes'+(lc.area_m2?' · '+lc.area_m2+' m²':'')+(lc.score!=null?' · <b>score '+lc.score+'</b>':'')+'</div>'+
+      '</div></div>').join('');
+    if (!items.length) h += '<div style="padding:2px 12px 8px" class="muted">—</div>';
+  }
+  pb.innerHTML = h;
+}
+
+/* ================= DETALLE DE LOCAL ================= */
+async function openDetail(id){
+  const lc = D.locales.find(x=>String(x.id)===String(id)); if(!lc) return;
+  selLocal = lc;
+  if (!DEMO){
+    const [m,e,t] = await Promise.all([
+      sb.from('local_media').select('*').eq('local_id', lc.id),
+      sb.from('local_eventos').select('*').eq('local_id', lc.id).order('created_at'),
+      sb.from('trafico').select('*').eq('local_id', lc.id).order('fecha')
+    ]);
+    lc._media=m.data||[]; lc._eventos=e.data||[]; lc._trafico=t.data||[];
+  }
+  lc._media = lc._media||[]; lc._eventos = lc._eventos||[]; lc._trafico = lc._trafico||[];
+  renderPanel(); drawMap();
+  if (lc.lat!=null){ map.panTo([lc.lat,lc.lon]); if(map.getZoom()<14) map.setZoom(15); }
+}
+function renderDetail(pb){
+  const lc = selLocal;
+  const sc = computeScore(lc);
+  const senalesHtml = SENALES.map(([k,lab])=>{
+    const on = lc.senales && lc.senales[k];
+    return '<label class="'+(on?'sel':'')+'"><input type="checkbox" '+(on?'checked':'')+' onchange="toggleSenal(\''+k+'\')">'+lab+'</label>';
+  }).join('');
+  const opsHtml = ['Movistar','Claro','Bitel','Entel'].map(op=>{
+    const on = lc.operadores_cerca && lc.operadores_cerca[op];
+    return '<label class="'+(on?'sel':'')+'"><input type="checkbox" '+(on?'checked':'')+' onchange="toggleOpCerca(\''+op+'\')">'+op+' &lt;200m</label>';
+  }).join('');
+  const estadoBtns = Object.keys(ESTADOS).filter(e=>e!==lc.estado).map(e=>
+    '<button class="btn" style="border-color:'+ECOLOR[e]+';color:'+ECOLOR[e]+'" onclick="cambiarEstado(\''+e+'\')">→ '+ESTADOS[e]+'</button>').join('');
+  const media = (lc._media||[]).map(m=>'<img class="thumb" data-path="'+esc(m.path)+'" title="'+esc(m.origen)+'" onclick="openMedia(this.dataset.path)">').join('');
+  const trafRows = (lc._trafico||[]).map(t=>'<tr><td>'+esc(t.fecha)+'</td><td>'+esc(t.franja)+'</td><td>'+t.conteo+' /'+(t.minutos||15)+"'"+'</td><td>'+esc(t.medido_por||'')+'</td></tr>').join('');
+  const evts = (lc._eventos||[]).map(ev=>'<div class="muted">'+new Date(ev.created_at).toLocaleString('es-PE')+' — '+esc(ev.estado_anterior||'·')+' → <b>'+esc(ev.estado_nuevo)+'</b> ('+esc(ev.user_email||'')+')'+(ev.motivo?': '+esc(ev.motivo):'')+'</div>').join('');
+  pb.innerHTML = '<div id="detail">'+
+    '<button class="btn" onclick="selLocal=null;renderPanel();drawMap()">← Volver</button>'+
+    '<h3 style="margin-top:10px">'+esc(lc.nombre)+'</h3>'+
+    '<span class="badge" style="background:'+ECOLOR[lc.estado]+'">'+ESTADOS[lc.estado]+'</span> '+
+    '<span class="muted">'+esc(lc.distrito||'')+(lc.cluster_nombre?' · '+esc(lc.cluster_nombre):'')+'</span>'+
+    '<div class="scorebox"><div style="display:flex;align-items:baseline;gap:10px"><span class="big">'+(sc.total!=null?sc.total:'—')+'</span><span class="muted">score /100 · pesos: '+pesosStr()+'</span></div>'+
+      sc.rows.map(r=>'<div class="sbar"><span style="width:118px">'+r[0]+'</span><span class="tr"><i style="width:'+r[1]+'%"></i></span><span style="width:30px;text-align:right">'+r[1]+'</span></div>').join('')+
+    '</div>'+
+    '<dl>'+
+    '<dt>Dirección</dt><dd>'+esc(lc.direccion||'—')+(lc.link_maps?' · <a href="'+esc(lc.link_maps)+'" target="_blank">ver en Maps</a>':'')+'</dd>'+
+    '<dt>Condiciones</dt><dd>'+fmtS(lc.precio_soles)+'/mes · Garantía '+fmtS(lc.garantia_soles)+' · Adelanto '+(lc.adelanto_meses??'—')+' mes(es) · Plazo '+(lc.plazo_meses??'—')+' meses · '+(lc.area_m2?lc.area_m2+' m²':'—')+'</dd>'+
+    '<dt>Descripción</dt><dd>'+esc(lc.descripcion||'—')+'</dd>'+
+    '<dt>Corredora</dt><dd>'+esc(lc.corredora||'—')+'</dd>'+
+    '<dt>Señales comerciales (suman al score)</dt><dd><div class="checks">'+senalesHtml+'</div></dd>'+
+    '<dt>Operadores a menos de 200 m</dt><dd><div class="checks">'+opsHtml+'</div></dd>'+
+    '<dt>Tráfico peatonal medido</dt><dd>'+
+      (trafRows?'<table class="mini"><tr><th>Fecha</th><th>Franja</th><th>Conteo</th><th>Midió</th></tr>'+trafRows+'</table>':'<span class="muted">Sin mediciones aún.</span>')+
+      '<div class="btnrow"><button class="btn" onclick="addTrafico()">＋ Registrar conteo</button></div></dd>'+
+    '<dt>Fotos / videos</dt><dd><div class="gallery">'+(media||'<span class="muted">Sin archivos.</span>')+'</div>'+
+      '<div class="btnrow"><input type="file" id="fmedia" multiple accept="image/*,video/*" style="width:auto"><button class="btn" onclick="uploadMedia()">Subir</button></div></dd>'+
+    '<dt>Notas internas</dt><dd><textarea id="f_notas" rows="2">'+esc(lc.notas_internas||'')+'</textarea>'+
+      '<div class="btnrow"><button class="btn" onclick="saveNotas()">Guardar notas</button></div></dd>'+
+    '<dt>Cambiar estado</dt><dd><div class="btnrow">'+estadoBtns+'</div></dd>'+
+    '<dt>Historial</dt><dd>'+(evts||'<span class="muted">Sin eventos.</span>')+'</dd>'+
+    '</dl>'+
+    '<div class="btnrow" style="margin-top:14px"><button class="btn accent" onclick="genFicha()">📄 Generar ficha KAM (PDF)</button>'+
+    (myRol==='admin'?'<button class="btn danger" onclick="delLocal()">Eliminar</button>':'')+'</div>'+
+    '</div>';
+}
+function pesosStr(){ const p=D.pesos; return p.entorno+'/'+p.trafico+'/'+p.senales+'/'+p.operadores+'/'+p.condiciones; }
+
+/* ================= SCORING ================= */
+function computeScore(lc){
+  const p = D.pesos;
+  // 1) entorno: cluster mas cercano + TEX a <500m
+  let entorno = 50, texN = 0;
+  if (lc.lat!=null){
+    let best=null, bd=1e9;
+    D.clusters.forEach(c=>{ if(c.lat==null)return; const d=distKm(lc.lat,lc.lon,c.lat,c.lon); if(d<bd){bd=d;best=c;} });
+    const clusterScore = (best && bd<4) ? Number(best.score)||50 : 40;
+    let bestTex = 0;
+    D.tex.forEach(t=>{ if(t.lat==null||t.cerrada)return; const d=distKm(lc.lat,lc.lon,t.lat,t.lon);
+      if(d<0.5){ let v=((t.ss_mayo||0)+(t.ss_junio||0))/2; if(t.fraude)v*=0.55; bestTex=Math.max(bestTex,v);} });
+    texN = Math.min(100, bestTex/200*100);
+    entorno = Math.round(0.6*clusterScore + 0.4*(bestTex>0?texN:clusterScore));
+    if (best && bd<4) lc.cluster_nombre = best.nombre;
+  }
+  // 2) trafico
+  let traf = null;
+  if (lc._trafico && lc._trafico.length){
+    const avg = lc._trafico.reduce((s,t)=>s + t.conteo*15/(t.minutos||15),0)/lc._trafico.length;
+    traf = Math.round(Math.min(100, avg/150*100));
+  }
+  // 3) senales
+  let sen = 0; SENALES.forEach(([k,_,pts])=>{ if(lc.senales && lc.senales[k]) sen+=pts; }); sen = Math.min(100,sen);
+  // 4) operadores cerca
+  const oc = lc.operadores_cerca||{};
+  let ops = 50 + (oc.Entel?20:0) + (oc.Bitel?15:0) + (oc.Claro?15:0) - (oc.Movistar?40:0);
+  ops = Math.max(0, Math.min(100, ops));
+  // 5) condiciones
+  let cond = 50;
+  if (lc.precio_soles && lc.cluster_nombre){
+    const c = D.clusters.find(x=>x.nombre===lc.cluster_nombre);
+    if (c && c.renta_rango && /\d+-\d+/.test(c.renta_rango)){
+      const [lo,hi] = c.renta_rango.split('-').map(Number);
+      cond = lc.precio_soles<=lo?95 : lc.precio_soles<=(lo+hi)/2?75 : lc.precio_soles<=hi?55 : 25;
+    }
+  }
+  if (lc.plazo_meses>=36) cond = Math.min(100, cond+10);
+  if (lc.garantia_soles && lc.precio_soles && lc.garantia_soles > 3*lc.precio_soles) cond = Math.max(0, cond-10);
+  const trafEff = traf==null ? 50 : traf;
+  const total = Math.round((entorno*p.entorno + trafEff*p.trafico + sen*p.senales + ops*p.operadores + cond*p.condiciones)/100);
+  return { total, rows:[['Entorno TEX/zona',entorno],['Tráfico'+(traf==null?' (sin data)':''),trafEff],['Señales',sen],['Operadores',ops],['Condiciones',cond]],
+    detalle:{entorno, trafico:trafEff, senales:sen, operadores:ops, condiciones:cond, sin_trafico: traf==null} };
+}
+async function persistScore(lc){
+  const sc = computeScore(lc);
+  lc.score = sc.total; lc.score_detalle = sc.detalle;
+  if (!DEMO) await sb.from('locales').update({score:lc.score, score_detalle:lc.score_detalle, senales:lc.senales, operadores_cerca:lc.operadores_cerca, cluster_nombre:lc.cluster_nombre||null, updated_at:new Date().toISOString()}).eq('id',lc.id);
+}
+async function toggleSenal(k){ const lc=selLocal; lc.senales=lc.senales||{}; lc.senales[k]=!lc.senales[k]; await persistScore(lc); renderPanel(); }
+async function toggleOpCerca(op){ const lc=selLocal; lc.operadores_cerca=lc.operadores_cerca||{}; lc.operadores_cerca[op]=!lc.operadores_cerca[op]; await persistScore(lc); renderPanel(); }
+
+/* ================= NUEVO LOCAL + PARSER WHATSAPP ================= */
+function openNuevo(){ pickingCoord=true; ['f_wsp','f_nombre','f_distrito','f_direccion','f_link','f_lat','f_lon','f_desc','f_area','f_precio','f_garantia','f_plazo','f_adelanto','f_corredora'].forEach(id=>document.getElementById(id).value=''); document.getElementById('wspmsg').textContent=''; openModal('mNuevo'); }
+function parseWsp(){
+  const t = document.getElementById('f_wsp').value; if(!t){return;}
+  let found=[];
+  const set=(id,v)=>{ if(v!=null && v!==''){ document.getElementById(id).value=v; found.push(id.replace('f_','')); } };
+  const num = s => s ? Number(String(s).replace(/[^\d.]/g,'').replace(/\.(?=\d{3}(\D|$))/g,'')) : null;
+  const mPrecio = t.match(/(?:alquiler|renta|precio|mensual(?:idad)?)[^0-9Ss$]{0,20}(?:S\/\.?\s*|\$\s*)?([\d.,]{3,})/i) || t.match(/S\/\.?\s*([\d.,]{3,})/);
+  if (mPrecio) set('f_precio', num(mPrecio[1]));
+  const mGar = t.match(/garant[ií]a[^0-9]{0,25}(?:S\/\.?\s*)?([\d.,]{3,})/i);
+  if (mGar) set('f_garantia', num(mGar[1]));
+  const mGarM = t.match(/garant[ií]a[^0-9]{0,25}(\d{1,2})\s*mes/i);
+  if (mGarM && !mGar){ const p = num((mPrecio||[])[1]); if(p) set('f_garantia', p*Number(mGarM[1])); }
+  const mAde = t.match(/adelant[oa][^0-9]{0,25}(\d{1,2})\s*mes/i);
+  if (mAde) set('f_adelanto', mAde[1]);
+  const mPlazo = t.match(/(\d{1,2})\s*años?/i);
+  if (mPlazo) set('f_plazo', Number(mPlazo[1])*12); else { const mM=t.match(/plazo[^0-9]{0,20}(\d{1,3})\s*mes/i); if(mM) set('f_plazo', mM[1]); }
+  const mArea = t.match(/(\d{1,4}(?:[.,]\d+)?)\s*(?:m2|m²|mts2|metros)/i);
+  if (mArea) set('f_area', String(mArea[1]).replace(',','.'));
+  const mLink = t.match(/https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|www\.google\.[a-z.]+\/maps|maps\.google\.[a-z.]+)[^\s]*/i);
+  if (mLink){ set('f_link', mLink[0]);
+    const mC = mLink[0].match(/[@=](-?\d{1,2}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})/);
+    if (mC){ set('f_lat', mC[1]); set('f_lon', mC[2]); }
+  }
+  const mTel = t.match(/9\d{8}/); if (mTel) set('f_corredora', ((document.getElementById('f_corredora').value||'')+' '+mTel[0]).trim());
+  const mDir = t.match(/(?:direcci[oó]n|ubicad[oa] en|se ubica en|Av\.|Jr\.|Calle|Mz\.?)[^\n]{5,80}/i);
+  if (mDir) set('f_direccion', mDir[0].replace(/^(direcci[oó]n[:\s]*)/i,'').trim());
+  document.getElementById('wspmsg').textContent = found.length ? ('Detectado: '+found.join(', ')+'. Revisa y completa.') : 'No se detectaron campos: completa manualmente.';
+}
+async function saveNuevo(){
+  const g=id=>document.getElementById(id).value.trim();
+  const nv=id=>{ const v=g(id); return v===''?null:Number(v); };
+  if (!g('f_nombre')){ toast('Ponle un nombre corto al local'); return; }
+  const rec = { estado:'recibido', nombre:g('f_nombre'), distrito:g('f_distrito')||null, direccion:g('f_direccion')||null,
+    link_maps:g('f_link')||null, lat:nv('f_lat'), lon:nv('f_lon'), descripcion:g('f_desc')||null,
+    area_m2:nv('f_area'), precio_soles:nv('f_precio'), garantia_soles:nv('f_garantia'),
+    adelanto_meses:nv('f_adelanto'), plazo_meses:nv('f_plazo'), corredora:g('f_corredora')||null,
+    senales:{}, operadores_cerca:{} };
+  if (DEMO){ rec.id='demo-'+Date.now(); rec.created_at=new Date().toISOString(); rec._media=[];rec._eventos=[];rec._trafico=[]; D.locales.unshift(rec); }
+  else {
+    rec.created_by = me.id;
+    const { data, error } = await sb.from('locales').insert(rec).select().single();
+    if (error){ toast('Error: '+error.message); return; }
+    await sb.from('local_eventos').insert({local_id:data.id, estado_anterior:null, estado_nuevo:'recibido', motivo:'Registro inicial', user_id:me.id, user_email:me.email});
+    D.locales.unshift(data);
+  }
+  closeModal('mNuevo'); toast('Local registrado');
+  const lc = D.locales[0]; await persistScore(lc); renderAll(); openDetail(lc.id);
+}
+async function cambiarEstado(nuevo){
+  const lc = selLocal;
+  const motivo = prompt('Motivo del cambio a "'+ESTADOS[nuevo]+'" (opcional):') || '';
+  const ant = lc.estado; lc.estado = nuevo;
+  if (!DEMO){
+    await sb.from('locales').update({estado:nuevo, updated_at:new Date().toISOString()}).eq('id',lc.id);
+    await sb.from('local_eventos').insert({local_id:lc.id, estado_anterior:ant, estado_nuevo:nuevo, motivo, user_id:me.id, user_email:me.email});
+  }
+  lc._eventos = (lc._eventos||[]).concat([{created_at:new Date().toISOString(), estado_anterior:ant, estado_nuevo:nuevo, motivo, user_email:(me.email||'demo')}]);
+  toast('Estado: '+ESTADOS[nuevo]); renderPanel(); drawMap();
+}
+async function addTrafico(){
+  const lc = selLocal;
+  const fecha = prompt('Fecha (AAAA-MM-DD):', new Date().toISOString().slice(0,10)); if(!fecha) return;
+  const franja = prompt('Franja horaria (ej. 18:00-19:00):'); if(!franja) return;
+  const conteo = Number(prompt('Personas contadas en 15 minutos:')); if(!conteo) return;
+  const reg = {local_id:lc.id, fecha, franja, conteo, minutos:15, medido_por:(me.email||'demo')};
+  if (!DEMO){ const {error} = await sb.from('trafico').insert(reg); if(error){toast('Error: '+error.message);return;} }
+  lc._trafico = (lc._trafico||[]).concat([reg]);
+  await persistScore(lc); renderPanel(); toast('Conteo registrado');
+}
+async function saveNotas(){
+  const lc=selLocal; lc.notas_internas = document.getElementById('f_notas').value;
+  if(!DEMO) await sb.from('locales').update({notas_internas:lc.notas_internas, updated_at:new Date().toISOString()}).eq('id',lc.id);
+  toast('Notas guardadas');
+}
+async function delLocal(){
+  if (!confirm('¿Eliminar este local definitivamente?')) return;
+  if (!DEMO) await sb.from('locales').delete().eq('id',selLocal.id);
+  D.locales = D.locales.filter(l=>l.id!==selLocal.id); selLocal=null; renderAll();
+}
+/* media */
+async function uploadMedia(){
+  const inp = document.getElementById('fmedia'); if(!inp.files.length){ toast('Elige archivos'); return; }
+  const lc = selLocal;
+  for (const f of inp.files){
+    const tipo = f.type.startsWith('video')?'video':'foto';
+    if (DEMO){ lc._media.push({path:URL.createObjectURL(f), tipo, origen:'pbd', _demo:true}); continue; }
+    const path = lc.id+'/'+Date.now()+'_'+f.name.replace(/[^\w.\-]/g,'_');
+    const { error } = await sb.storage.from('media').upload(path, f);
+    if (error){ toast('Error subiendo '+f.name+': '+error.message); continue; }
+    const { data } = await sb.from('local_media').insert({local_id:lc.id, tipo, origen:'pbd', path, uploaded_by:me.id}).select().single();
+    lc._media.push(data);
+  }
+  toast('Archivos subidos'); renderPanel();
+}
+async function openMedia(path){
+  if (DEMO || path.startsWith('blob:')){ window.open(path,'_blank'); return; }
+  const { data, error } = await sb.storage.from('media').createSignedUrl(path, 3600);
+  if (data) window.open(data.signedUrl, '_blank'); else toast('No se pudo abrir: '+(error&&error.message));
+}
+/* thumbnails: reemplaza src por signed urls */
+const mediaObserver = new MutationObserver(()=>{
+  document.querySelectorAll('img.thumb:not([data-loaded])').forEach(async img=>{
+    img.dataset.loaded='1';
+    const p = img.dataset.path;
+    if (DEMO || p.startsWith('blob:')){ img.src=p; return; }
+    const { data } = await sb.storage.from('media').createSignedUrl(p, 3600);
+    if (data) img.src = data.signedUrl;
+  });
+});
+mediaObserver.observe(document.body, {childList:true, subtree:true});
+
+/* ================= FICHA KAM (PDF via imprimir) ================= */
+function genFicha(){
+  const lc = selLocal; const sc = computeScore(lc);
+  const foto = (lc._media||[]).find(m=>m.tipo==='foto');
+  const w = window.open('','_blank');
+  const fotoTag = foto ? '<img id="fichafoto" style="width:100%;max-height:280px;object-fit:cover;border-radius:10px">' : '';
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ficha '+esc(lc.nombre)+'</title><style>'+
+   'body{font-family:Arial,sans-serif;color:#1A2233;margin:34px;font-size:13px;line-height:1.5}'+
+   '.top{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #0E1F3D;padding-bottom:8px}'+
+   '.brand{font-size:22px;font-weight:300}.brand b{font-weight:800;color:#00B3A4}'+
+   '.tag{background:#0E1F3D;color:#fff;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:700}'+
+   'h1{font-size:19px;margin:12px 0 2px}.sub{color:#5A6478;font-size:12px}'+
+   'table{width:100%;border-collapse:collapse;margin-top:12px}td,th{border:1px solid #D9DFE8;padding:6px 9px;text-align:left;font-size:12.5px}'+
+   'th{background:#F0F3F8;width:32%}.score{font-size:30px;font-weight:800;color:#0E1F3D}'+
+   '.foot{margin-top:22px;font-size:10.5px;color:#8A93A6;border-top:1px solid #D9DFE8;padding-top:6px}'+
+   '@media print{button{display:none}}</style></head><body>'+
+   '<div class="top"><div class="brand">Grid<b>Retail</b> <span style="font-size:11px;color:#8A93A6">GRIDTEL</span></div><div class="tag">FICHA DE LOCAL — '+esc(ESTADOS[lc.estado]).toUpperCase()+'</div></div>'+
+   '<h1>'+esc(lc.nombre)+'</h1><div class="sub">'+esc(lc.direccion||'')+' · '+esc(lc.distrito||'')+(lc.link_maps?' · '+esc(lc.link_maps):'')+'</div>'+
+   fotoTag+
+   '<table>'+
+   '<tr><th>Score GridRetail</th><td><span class="score">'+(sc.total??'—')+'</span> /100 &nbsp; <span style="color:#5A6478;font-size:11px">Entorno '+sc.detalle.entorno+' · Tráfico '+sc.detalle.trafico+(sc.detalle.sin_trafico?' (sin medición)':'')+' · Señales '+sc.detalle.senales+' · Operadores '+sc.detalle.operadores+' · Condiciones '+sc.detalle.condiciones+'</span></td></tr>'+
+   '<tr><th>Renta mensual</th><td>'+fmtS(lc.precio_soles)+'</td></tr>'+
+   '<tr><th>Garantía</th><td>'+fmtS(lc.garantia_soles)+'</td></tr>'+
+   '<tr><th>Adelanto</th><td>'+(lc.adelanto_meses??'—')+' mes(es)</td></tr>'+
+   '<tr><th>Plazo</th><td>'+(lc.plazo_meses??'—')+' meses</td></tr>'+
+   '<tr><th>Área</th><td>'+(lc.area_m2?lc.area_m2+' m²':'—')+'</td></tr>'+
+   '<tr><th>Zona / microcluster</th><td>'+esc(lc.cluster_nombre||'—')+'</td></tr>'+
+   '<tr><th>Descripción</th><td>'+esc(lc.descripcion||'—')+'</td></tr>'+
+   '<tr><th>Señales del entorno</th><td>'+SENALES.filter(([k])=>lc.senales&&lc.senales[k]).map(([_,l])=>l).join(', ')+'</td></tr>'+
+   '<tr><th>Operadores a <200 m</th><td>'+Object.keys(lc.operadores_cerca||{}).filter(k=>lc.operadores_cerca[k]).join(', ')+'</td></tr>'+
+   '</table>'+
+   '<div class="foot">Generado por GridRetail · '+new Date().toLocaleDateString('es-PE')+' · Confidencial Gridtel/PBD — la información de mercado se presenta de forma agregada.</div>'+
+   '<div style="margin-top:14px"><button onclick="window.print()" style="padding:9px 16px;font-size:14px">🖨 Imprimir / Guardar como PDF</button></div>'+
+   '</body></html>');
+  w.document.close();
+  if (foto){
+    if (DEMO || foto.path.startsWith('blob:')){ const el=w.document.getElementById('fichafoto'); if(el) el.src=foto.path; }
+    else sb.storage.from('media').createSignedUrl(foto.path, 3600).then(({data})=>{ const el=w.document.getElementById('fichafoto'); if(el&&data) el.src=data.signedUrl; });
+  }
+}
+
+/* ================= PESOS (admin) ================= */
+function openPesos(){
+  const p=D.pesos;
+  ['entorno','trafico','senales','operadores','condiciones'].forEach(k=>document.getElementById('p_'+k).value=p[k]);
+  openModal('mPesos');
+}
+async function savePesos(){
+  const p={}; let sum=0;
+  for (const k of ['entorno','trafico','senales','operadores','condiciones']){ p[k]=Number(document.getElementById('p_'+k).value)||0; sum+=p[k]; }
+  if (sum!==100){ toast('Los pesos deben sumar 100 (ahora: '+sum+')'); return; }
+  D.pesos=p;
+  if (!DEMO) await sb.from('app_config').update({value:p}).eq('key','pesos_scoring');
+  closeModal('mPesos'); toast('Pesos actualizados'); renderPanel();
+}
+
+boot();
+</script>
+</body>
+</html>
