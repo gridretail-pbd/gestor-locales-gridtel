@@ -10,31 +10,35 @@
 body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:#F5F7FA;color:#1A2233;margin:0;font-size:13.5px}
 header{background:#0E1F3D;color:#fff;padding:12px 18px;display:flex;align-items:center;gap:14px}
 .brand{font-size:17px;font-weight:300}.brand b{font-weight:800;color:#00B3A4}
-main{max-width:1180px;margin:0 auto;padding:16px}
+main{max-width:1280px;margin:0 auto;padding:16px}
 .card{background:#fff;border:1px solid #E3E7EE;border-radius:12px;padding:14px 16px;margin-bottom:14px}
 button{cursor:pointer;border:1px solid #E3E7EE;background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit}
 button.primary{background:#0E1F3D;color:#fff;border-color:#0E1F3D}
 button.accent{background:#00B3A4;color:#04302C;border:none;font-weight:700}
+button.mini{padding:4px 8px;font-size:12px}
 button:disabled{opacity:.5;cursor:default}
 input,select{font-family:inherit;font-size:13px;border:1px solid #E3E7EE;border-radius:8px;padding:7px 9px}
 table{width:100%;border-collapse:collapse;font-size:12.5px}
-th{background:#F0F3F8;text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;color:#5A6478;position:sticky;top:0}
+th{background:#F0F3F8;text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;color:#5A6478;position:sticky;top:0;z-index:2}
 td{padding:6px 8px;border-bottom:1px solid #F0F2F6;vertical-align:top}
 tr.ok td{background:#F2FBF4}
 tr.far td{background:#FFF8EC}
 tr.fail td{background:#FDF2F1}
+tr.manual td{background:#EEF4FF}
 .muted{color:#8A93A6;font-size:11.5px}
-.dist{font-weight:700}
+.dist{font-weight:700;white-space:nowrap}
 #bar{height:6px;background:#E8ECF3;border-radius:3px;overflow:hidden;margin-top:8px}
 #bar i{display:block;height:100%;background:#00B3A4;width:0%}
 a{color:#0B6BCB}
-.qinput{width:96%;font-size:12px}
+.qinput{width:97%;font-size:12px}
+.ginput{width:97%;font-size:12px;border-color:#BFD3F5}
 #login{max-width:360px;margin:60px auto}
 label{display:block;font-size:11px;font-weight:700;color:#5A6478;margin:10px 0 3px;text-transform:uppercase}
+.gerr{color:#C0392B;font-size:11px}
 </style>
 </head>
 <body>
-<header><div class="brand">Grid<b>Retail</b></div><div style="font-size:13px;color:#93A3C4">Calibración de coordenadas (Nominatim/OpenStreetMap)</div>
+<header><div class="brand">Grid<b>Retail</b></div><div style="font-size:13px;color:#93A3C4">Calibración de coordenadas</div>
 <div style="flex:1"></div><a href="index.html" style="color:#93A3C4;font-size:12.5px">← volver a la app</a></header>
 <main>
 <div id="login" class="card">
@@ -47,24 +51,32 @@ label{display:block;font-size:11px;font-weight:700;color:#5A6478;margin:10px 0 3
 
 <div id="app" style="display:none">
 <div class="card">
-  <b>¿Cómo funciona?</b> <span class="muted">Busca cada punto en OpenStreetMap (que tiene mapeados los malls, Plaza Vea, Tottus, Metro, etc. de Lima), compara con la coordenada actual y te propone la corrección. Tú revisas, marcas y aplicas. Ritmo: 1 búsqueda/segundo (política de Nominatim) — ~2 min para 120 puntos. Consejo: si una propuesta sale mal, edita el texto de búsqueda de esa fila (ej. "Plaza Vea Comas") y presiona ↻.</span>
+  <b>Dos formas de corregir cada punto:</b>
+  <span class="muted">(1) <b>Automática</b>: busca en OpenStreetMap con el botón Geocodificar. (2) <b>Manual con Google Maps</b>: busca el local en Google Maps y pega en la columna azul cualquiera de estas tres cosas — el <b>link</b> de la barra de direcciones (el largo, con @-12.04…), la <b>coordenada</b> (clic derecho sobre el punto → clic al número para copiarla), o el <b>Plus Code</b> (ej. "X58Q+F9 Lima", aparece en la tarjeta del lugar) — y presiona "Usar". Los links cortos maps.app.goo.gl no sirven: ábrelos primero y copia el link largo o la coordenada.</span>
   <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <select id="scope">
       <option value="entel">Operadores: solo Entel</option>
-      <option value="todos">Operadores: todos (Entel, Movistar, Claro, Bitel)</option>
-      <option value="tex">Tiendas TEX (usa su dirección oficial)</option>
+      <option value="todos">Operadores: todos</option>
+      <option value="tex">Tiendas TEX</option>
+    </select>
+    <select id="filtro">
+      <option value="todos">Mostrar: todos</option>
+      <option value="pend">Mostrar: solo sin corrección aplicable</option>
     </select>
     <button class="primary" onclick="cargar()">1 · Cargar puntos</button>
-    <button class="accent" id="btngeo" onclick="geocodificarTodo()" disabled>2 · Geocodificar</button>
+    <button class="accent" id="btngeo" onclick="geocodificarTodo()" disabled>2 · Geocodificar (OSM)</button>
     <button class="accent" id="btnapply" onclick="aplicar()" disabled>3 · Aplicar seleccionados</button>
     <span id="status" class="muted"></span>
   </div>
   <div id="bar"><i></i></div>
 </div>
-<div class="card" style="max-height:65vh;overflow:auto">
+<div class="card" style="max-height:63vh;overflow:auto">
   <table id="tbl"><thead><tr>
     <th><input type="checkbox" id="selall" onchange="toggleAll(this.checked)"></th>
-    <th>Punto</th><th>Búsqueda (editable)</th><th></th><th>Encontrado en OSM</th><th>Ajuste</th>
+    <th style="min-width:170px">Punto</th>
+    <th style="min-width:180px">Búsqueda OSM (editable)</th><th></th>
+    <th style="min-width:190px">Google Maps: link / coordenada / plus code</th><th></th>
+    <th style="min-width:170px">Corrección propuesta</th><th>Ajuste</th>
   </tr></thead><tbody id="tb"></tbody></table>
 </div>
 </div>
@@ -73,7 +85,7 @@ label{display:block;font-size:11px;font-weight:700;color:#5A6478;margin:10px 0 3
 "use strict";
 const CFG = window.GRIDRETAIL_CONFIG;
 const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
-let rows = [];   // {id, tabla, nombre, query, lat, lon, newlat, newlon, display, dist, apply}
+let rows = [];
 async function doLogin(){
   const { error } = await sb.auth.signInWithPassword({ email: document.getElementById('lemail').value.trim(), password: document.getElementById('lpass').value });
   if (error){ document.getElementById('lmsg').textContent = error.message; return; }
@@ -81,6 +93,79 @@ async function doLogin(){
 }
 sb.auth.getSession().then(({data:{session}})=>{ if(session){ document.getElementById('login').style.display='none'; document.getElementById('app').style.display='block'; } });
 
+/* ---------- Plus Codes (Open Location Code): decodificacion local, sin llamar a Google ---------- */
+const OLC_AB = '23456789CFGHJMPQRVWX';
+function olcEncode(lat, lon){
+  lat = Math.min(90, Math.max(-90, lat)); lon = ((lon+180)%360+360)%360-180;
+  let la = lat+90, lo = lon+180, code='', res=20;
+  for (let i=0;i<5;i++){
+    const a = Math.min(19, Math.floor(la/res)), b = Math.min(19, Math.floor(lo/res));
+    code += OLC_AB[a]+OLC_AB[b]; la -= a*res; lo -= b*res; res /= 20;
+  }
+  return code; // 10 digitos
+}
+function olcDecodeFull(code){
+  const d = code.replace('+','').toUpperCase();
+  let la=0, lo=0, res=20;
+  for (let i=0;i<Math.min(10,d.length);i+=2){
+    la += OLC_AB.indexOf(d[i])*res; lo += OLC_AB.indexOf(d[i+1])*res; res /= 20;
+  }
+  let latSize = res*20, lonSize = res*20; // tamaño de la ultima celda procesada
+  if (d.length>10){ // caracter de grilla 5x4
+    const gi = OLC_AB.indexOf(d[10]);
+    la += Math.floor(gi/4)*(latSize/5); lo += (gi%4)*(lonSize/4);
+    latSize/=5; lonSize/=4;
+  }
+  return { lat: la-90+latSize/2, lon: lo-180+lonSize/2 };
+}
+function olcDecode(code, refLat, refLon){
+  code = code.toUpperCase().trim();
+  const plus = code.indexOf('+');
+  if (plus === 8) return olcDecodeFull(code);        // codigo completo
+  const padLen = 8 - plus;                            // caracteres que faltan
+  const ref = olcEncode(refLat, refLon);
+  const cand = ref.slice(0, padLen) + code;
+  let r = olcDecodeFull(cand);
+  const cellRes = Math.pow(20, 2 - padLen/2);         // tamaño del bloque recuperado (grados)
+  if (r.lat < refLat - cellRes/2) r.lat += cellRes; else if (r.lat > refLat + cellRes/2) r.lat -= cellRes;
+  if (r.lon < refLon - cellRes/2) r.lon += cellRes; else if (r.lon > refLon + cellRes/2) r.lon -= cellRes;
+  return r;
+}
+/* ---------- parser de lo que pegue el usuario ---------- */
+function parseGoogle(txt, refLat, refLon){
+  txt = (txt||'').trim();
+  if (!txt) return { err:'vacío' };
+  if (/maps\.app\.goo\.gl|goo\.gl\/maps/i.test(txt) && !/@|!3d|[?&]q=/.test(txt))
+    return { err:'Link corto: ábrelo en el navegador y copia el link largo (con @) o la coordenada.' };
+  let m = txt.match(/@(-?\d{1,2}\.\d{3,}),(-?\d{1,3}\.\d{3,})/)      // url con @lat,lon
+       || txt.match(/!3d(-?\d{1,2}\.\d{3,})!4d(-?\d{1,3}\.\d{3,})/)  // url con !3d!4d (pin exacto)
+       || txt.match(/[?&](?:q|ll|query|center)=(-?\d{1,2}\.\d{3,})(?:%2C|,)\s*(-?\d{1,3}\.\d{3,})/i);
+  if (m) return chk(+m[1], +m[2]);
+  // coordenada pegada: "-12.046373, -77.030922" (tambien con espacios o ;)
+  m = txt.match(/^\s*(-?\d{1,2}[.,]\d{3,})[\s;,]+(-?\d{1,3}[.,]\d{3,})\s*$/);
+  if (m) return chk(parseFloat(m[1].replace(',','.')), parseFloat(m[2].replace(',','.')));
+  // plus code: "X58Q+F9 Lima" o "7FXFX58Q+F9"
+  m = txt.match(/([23456789CFGHJMPQRVWX]{2,8}\+[23456789CFGHJMPQRVWX]{2,3})/i);
+  if (m){
+    try { const r = olcDecode(m[1], refLat ?? -12.05, refLon ?? -77.05); return chk(r.lat, r.lon, ' (plus code)'); }
+    catch(e){ return { err:'Plus code inválido' }; }
+  }
+  return { err:'No reconocido. Pega el link largo, "lat, lon" o un plus code.' };
+  function chk(la, lo, suf){
+    if (la>-10.4 || la<-13.5 || lo>-76.0 || lo<-78.0) return { err:'La coordenada cae fuera de Lima ('+la.toFixed(4)+', '+lo.toFixed(4)+'). ¿Copiaste bien?' };
+    return { lat:+la.toFixed(6), lon:+lo.toFixed(6), src:'Google Maps'+(suf||'') };
+  }
+}
+function usarGoogle(i){
+  const r = rows[i];
+  const res = parseGoogle(r.gtxt, r.lat, r.lon);
+  if (res.err){ r.gerr = res.err; render(); return; }
+  r.gerr=''; r.newlat=res.lat; r.newlon=res.lon; r.display=res.src+' (manual)'; r.manual=true;
+  r.dist=distM(r.lat,r.lon,r.newlat,r.newlon); r.apply=true;
+  document.getElementById('btnapply').disabled=false;
+  render();
+}
+/* ---------- datos ---------- */
 function limpiar(nombre){
   return nombre.replace(/^Entel\s+/i,'').replace(/^(IS_|TPF[- ]?(TC)?\s*)/i,'')
     .replace(/_/g,' ').replace(/\b(I{1,3}|2)\b\s*$/,'').trim();
@@ -106,9 +191,9 @@ async function cargar(){
     let qy = sb.from('operadores').select('id,operador,nombre,direccion,lat,lon');
     if (scope==='entel') qy = qy.eq('operador','Entel');
     ({ data } = await qy);
-    rows = (data||[]).map(r=>({id:r.id, tabla:'operadores', nombre:r.nombre, direccion:r.direccion||'', lat:r.lat, lon:r.lon}));
+    rows = (data||[]).map(r=>({id:r.id, tabla:'operadores', nombre:(r.operador!=='Entel'?r.operador+' · ':'')+r.nombre, direccion:r.direccion||'', lat:r.lat, lon:r.lon}));
   }
-  rows.forEach(r=>{ r.query = queryDe(r); r.newlat=null; r.newlon=null; r.display=''; r.dist=null; r.apply=false; });
+  rows.forEach(r=>{ r.query = queryDe(r); r.gtxt=''; r.gerr=''; r.newlat=null; r.newlon=null; r.display=''; r.dist=null; r.apply=false; r.manual=false; });
   render();
   document.getElementById('btngeo').disabled = !rows.length;
   document.getElementById('status').textContent = rows.length+' puntos cargados';
@@ -120,13 +205,14 @@ async function geocodeOne(r){
     const res = await fetch(url, {headers:{'Accept-Language':'es'}});
     const js = await res.json();
     const hit = (js||[]).find(h=>{ const la=+h.lat, lo=+h.lon; return la<-10.5 && la>-13.4 && lo<-76.1 && lo>-77.9; });
-    if (hit){ r.newlat=+(+hit.lat).toFixed(6); r.newlon=+(+hit.lon).toFixed(6); r.display=hit.display_name.split(',').slice(0,3).join(','); r.dist=distM(r.lat,r.lon,r.newlat,r.newlon); r.apply = r.dist==null || r.dist>120; }
-    else { r.display='(sin resultado)'; r.newlat=null; r.apply=false; }
+    if (hit){ r.newlat=+(+hit.lat).toFixed(6); r.newlon=+(+hit.lon).toFixed(6); r.display=hit.display_name.split(',').slice(0,3).join(','); r.dist=distM(r.lat,r.lon,r.newlat,r.newlon); r.apply = r.dist==null || r.dist>120; r.manual=false; }
+    else { r.display='(sin resultado en OSM — usa la columna Google Maps)'; r.newlat=null; r.apply=false; }
   }catch(e){ r.display='(error de red)'; r.apply=false; }
 }
 async function geocodificarTodo(){
   const btn=document.getElementById('btngeo'); btn.disabled=true;
   for (let i=0;i<rows.length;i++){
+    if (rows[i].manual) continue; // no pisar correcciones manuales
     document.getElementById('status').textContent = 'Geocodificando '+(i+1)+' de '+rows.length+'…';
     document.querySelector('#bar i').style.width = Math.round((i+1)/rows.length*100)+'%';
     await geocodeOne(rows[i]);
@@ -135,33 +221,42 @@ async function geocodificarTodo(){
   }
   render(); btn.disabled=false;
   document.getElementById('btnapply').disabled=false;
-  const n=rows.filter(r=>r.apply).length;
-  document.getElementById('status').textContent = 'Listo: '+n+' correcciones propuestas (marcadas). Revisa y aplica.';
+  const n=rows.filter(r=>r.apply).length, sf=rows.filter(r=>r.newlat==null).length;
+  document.getElementById('status').textContent = 'Listo: '+n+' correcciones propuestas · '+sf+' sin resultado (complétalos con Google Maps).';
 }
 async function regeo(i){ await geocodeOne(rows[i]); render(); }
 function toggleAll(v){ rows.forEach(r=>{ if(r.newlat!=null) r.apply=v; }); render(); }
 function render(){
+  const filtro = document.getElementById('filtro').value;
   const tb=document.getElementById('tb');
   tb.innerHTML = rows.map((r,i)=>{
-    const cls = r.newlat==null ? (r.display?'fail':'') : (r.dist!=null && r.dist<=120 ? 'ok':'far');
+    if (filtro==='pend' && r.newlat!=null && !r.manual && r.dist!=null && r.dist<=120) return '';
+    const cls = r.manual?'manual':(r.newlat==null ? (r.display?'fail':'') : (r.dist!=null && r.dist<=120 ? 'ok':'far'));
     return '<tr class="'+cls+'">'+
     '<td><input type="checkbox" '+(r.apply?'checked':'')+' '+(r.newlat==null?'disabled':'')+' onchange="rows['+i+'].apply=this.checked"></td>'+
-    '<td><b>'+r.nombre.replace(/</g,'&lt;')+'</b><div class="muted">actual: '+(r.lat!=null? r.lat+', '+r.lon : 'sin coordenada')+'</div></td>'+
-    '<td><input class="qinput" value="'+r.query.replace(/"/g,'&quot;')+'" onchange="rows['+i+'].query=this.value"></td>'+
-    '<td><button onclick="regeo('+i+')" title="reintentar esta fila">↻</button></td>'+
-    '<td>'+(r.display?r.display.replace(/</g,'&lt;'):'—')+(r.newlat!=null?'<div class="muted">'+r.newlat+', '+r.newlon+' · <a target="_blank" href="https://www.openstreetmap.org/?mlat='+r.newlat+'&mlon='+r.newlon+'#map=18/'+r.newlat+'/'+r.newlon+'">ver</a></div>':'')+'</td>'+
+    '<td><b>'+r.nombre.replace(/</g,'&lt;')+'</b><div class="muted">actual: '+(r.lat!=null? r.lat+', '+r.lon : 'sin coordenada')+
+      (r.lat!=null?' · <a target="_blank" href="https://www.google.com/maps/search/?api=1&query='+r.lat+','+r.lon+'">ver en Google</a>':'')+'</div></td>'+
+    '<td><input class="qinput" value="'+String(r.query).replace(/"/g,'&quot;')+'" onchange="rows['+i+'].query=this.value"></td>'+
+    '<td><button class="mini" onclick="regeo('+i+')" title="buscar en OSM">↻</button></td>'+
+    '<td><input class="ginput" placeholder="pega link, coordenada o plus code" value="'+String(r.gtxt||'').replace(/"/g,'&quot;')+'" onchange="rows['+i+'].gtxt=this.value">'+
+      (r.gerr?'<div class="gerr">'+r.gerr+'</div>':'')+'</td>'+
+    '<td><button class="mini accent" onclick="usarGoogle('+i+')">Usar</button></td>'+
+    '<td>'+(r.display?String(r.display).replace(/</g,'&lt;'):'—')+(r.newlat!=null?'<div class="muted">'+r.newlat+', '+r.newlon+' · <a target="_blank" href="https://www.google.com/maps/search/?api=1&query='+r.newlat+','+r.newlon+'">verificar</a></div>':'')+'</td>'+
     '<td class="dist">'+(r.dist!=null? (r.dist+' m') : '')+'</td></tr>';
   }).join('');
 }
+document.getElementById('filtro').onchange = render;
 async function aplicar(){
   const sel = rows.filter(r=>r.apply && r.newlat!=null);
   if (!sel.length){ alert('No hay filas marcadas.'); return; }
   if (!confirm('Se actualizarán '+sel.length+' puntos en la base compartida. ¿Continuar?')) return;
   let ok=0;
   for (const r of sel){
-    const { error } = await sb.from(r.tabla).update({lat:r.newlat, lon:r.newlon, ...(r.tabla==='operadores'?{confianza:'ALTA (geocodificada OSM)'}:{confianza:'ALTA (geocodificada OSM)'})}).eq('id', r.id);
-    if (!error) ok++;
+    const conf = r.manual ? 'ALTA (Google Maps manual)' : 'ALTA (geocodificada OSM)';
+    const { error } = await sb.from(r.tabla).update({lat:r.newlat, lon:r.newlon, confianza:conf}).eq('id', r.id);
+    if (!error){ ok++; r.lat=r.newlat; r.lon=r.newlon; r.dist=0; r.apply=false; }
   }
+  render();
   document.getElementById('status').textContent = ok+' puntos actualizados en Supabase. Recarga la app para verlos.';
 }
 </script>
