@@ -446,8 +446,9 @@ function renderDetail(pb){
     '<dt>Cambiar estado</dt><dd><div class="btnrow">'+estadoBtns+'</div></dd>'+
     '<dt>Historial</dt><dd>'+(evts||'<span class="muted">Sin eventos.</span>')+'</dd>'+
     '</dl>'+
-    '<div class="btnrow" style="margin-top:14px"><button class="btn accent" onclick="genFicha()">📄 Generar ficha KAM (PDF)</button>'+
-    (myRol==='admin'?'<button class="btn danger" onclick="delLocal()">Eliminar</button>':'')+'</div>'+
+    '<div class="btnrow" style="margin-top:14px"><button class="btn primary" onclick="openEditar()">✎ Editar datos</button>'+
+    '<button class="btn accent" onclick="genFicha()">📄 Generar ficha KAM (PDF)</button>'+
+    (myRol==='admin'?'<button class="btn danger" onclick="delLocal()">Eliminar</button>':'<span class="muted" style="align-self:center">eliminar: solo admin</span>')+'</div>'+
     '</div>';
 }
 function pesosStr(){ const p=D.pesos; return p.entorno+'/'+p.trafico+'/'+p.senales+'/'+p.operadores+'/'+p.condiciones; }
@@ -504,8 +505,21 @@ async function persistScore(lc){
 async function toggleSenal(k){ const lc=selLocal; lc.senales=lc.senales||{}; lc.senales[k]=!lc.senales[k]; await persistScore(lc); renderPanel(); }
 async function toggleOpCerca(op){ const lc=selLocal; lc.operadores_cerca=lc.operadores_cerca||{}; lc.operadores_cerca[op]=!lc.operadores_cerca[op]; await persistScore(lc); renderPanel(); }
 
-/* ================= NUEVO LOCAL + PARSER WHATSAPP ================= */
-function openNuevo(){ pickingCoord=true; ['f_wsp','f_nombre','f_distrito','f_direccion','f_link','f_lat','f_lon','f_desc','f_area','f_precio','f_garantia','f_plazo','f_adelanto','f_corredora'].forEach(id=>document.getElementById(id).value=''); document.getElementById('wspmsg').textContent=''; openModal('mNuevo'); }
+/* ================= NUEVO / EDITAR LOCAL + PARSER WHATSAPP ================= */
+let editingId = null;
+function openNuevo(){ editingId=null; pickingCoord=true; ['f_wsp','f_nombre','f_distrito','f_direccion','f_link','f_lat','f_lon','f_desc','f_area','f_precio','f_garantia','f_plazo','f_adelanto','f_corredora'].forEach(id=>document.getElementById(id).value=''); document.getElementById('wspmsg').textContent=''; document.getElementById('mNuevoTitle').textContent='Nuevo local'; openModal('mNuevo'); }
+function openEditar(){
+  const lc = selLocal; if(!lc) return;
+  editingId = lc.id; pickingCoord = true;
+  const setv=(id,v)=>document.getElementById(id).value = (v==null?'':v);
+  setv('f_wsp',''); document.getElementById('wspmsg').textContent='';
+  setv('f_nombre',lc.nombre); setv('f_distrito',lc.distrito); setv('f_direccion',lc.direccion);
+  setv('f_link',lc.link_maps); setv('f_lat',lc.lat); setv('f_lon',lc.lon); setv('f_desc',lc.descripcion);
+  setv('f_area',lc.area_m2); setv('f_precio',lc.precio_soles); setv('f_garantia',lc.garantia_soles);
+  setv('f_plazo',lc.plazo_meses); setv('f_adelanto',lc.adelanto_meses); setv('f_corredora',lc.corredora);
+  document.getElementById('mNuevoTitle').textContent='Editar local';
+  openModal('mNuevo');
+}
 function parseWsp(){
   const t = document.getElementById('f_wsp').value; if(!t){return;}
   let found=[];
@@ -545,11 +559,21 @@ async function saveNuevo(){
   const g=id=>document.getElementById(id).value.trim();
   const nv=id=>{ const v=g(id); return v===''?null:Number(v); };
   if (!g('f_nombre')){ toast('Ponle un nombre corto al local'); return; }
-  const rec = { estado:'recibido', nombre:g('f_nombre'), distrito:g('f_distrito')||null, direccion:g('f_direccion')||null,
+  const campos = { nombre:g('f_nombre'), distrito:g('f_distrito')||null, direccion:g('f_direccion')||null,
     link_maps:g('f_link')||null, lat:nv('f_lat'), lon:nv('f_lon'), descripcion:g('f_desc')||null,
     area_m2:nv('f_area'), precio_soles:nv('f_precio'), garantia_soles:nv('f_garantia'),
-    adelanto_meses:nv('f_adelanto'), plazo_meses:nv('f_plazo'), corredora:g('f_corredora')||null,
-    senales:{}, operadores_cerca:{} };
+    adelanto_meses:nv('f_adelanto'), plazo_meses:nv('f_plazo'), corredora:g('f_corredora')||null };
+  if (editingId){
+    const lc = D.locales.find(x=>String(x.id)===String(editingId));
+    Object.assign(lc, campos);
+    if (!DEMO){
+      const { error } = await sb.from('locales').update({...campos, updated_at:new Date().toISOString()}).eq('id', lc.id);
+      if (error){ toast('Error al guardar: '+error.message); return; }
+    }
+    closeModal('mNuevo'); toast('Local actualizado');
+    await persistScore(lc); renderAll(); openDetail(lc.id); return;
+  }
+  const rec = { estado:'recibido', senales:{}, operadores_cerca:{}, ...campos };
   if (DEMO){ rec.id='demo-'+Date.now(); rec.created_at=new Date().toISOString(); rec._media=[];rec._eventos=[];rec._trafico=[]; D.locales.unshift(rec); }
   else {
     rec.created_by = me.id;
@@ -589,8 +613,13 @@ async function saveNotas(){
 }
 async function delLocal(){
   if (!confirm('¿Eliminar este local definitivamente?')) return;
-  if (!DEMO) await sb.from('locales').delete().eq('id',selLocal.id);
-  D.locales = D.locales.filter(l=>l.id!==selLocal.id); selLocal=null; renderAll();
+  if (!DEMO){
+    const { error } = await sb.from('locales').delete().eq('id',selLocal.id);
+    if (error){ toast('No se pudo eliminar: '+error.message+' (¿tu usuario es admin?)'); return; }
+    const { data: chk } = await sb.from('locales').select('id').eq('id',selLocal.id);
+    if (chk && chk.length){ toast('No se eliminó: tu usuario no tiene rol admin en Supabase.'); return; }
+  }
+  D.locales = D.locales.filter(l=>l.id!==selLocal.id); selLocal=null; renderAll(); toast('Local eliminado');
 }
 /* media */
 async function uploadMedia(){
