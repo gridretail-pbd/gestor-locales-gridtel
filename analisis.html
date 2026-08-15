@@ -10,13 +10,14 @@
 body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:#F5F7FA;color:#1A2233;margin:0;font-size:13.5px}
 header{background:#0E1F3D;color:#fff;padding:12px 18px;display:flex;align-items:center;gap:14px}
 .brand{font-size:17px;font-weight:300}.brand b{font-weight:800;color:#00B3A4}
-main{max-width:1240px;margin:0 auto;padding:16px}
+main{max-width:1280px;margin:0 auto;padding:16px}
 .card{background:#fff;border:1px solid #E3E7EE;border-radius:12px;padding:14px 16px;margin-bottom:14px}
 button{cursor:pointer;border:1px solid #E3E7EE;background:#fff;border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit}
 button.primary{background:#0E1F3D;color:#fff;border-color:#0E1F3D}
 button.accent{background:#00B3A4;color:#04302C;border:none;font-weight:700}
+button.mini{padding:4px 8px;font-size:12px}
 button:disabled{opacity:.5;cursor:default}
-input,select{font-family:inherit;font-size:13px;border:1px solid #E3E7EE;border-radius:8px;padding:7px 9px}
+input,select,textarea{font-family:inherit;font-size:13px;border:1px solid #E3E7EE;border-radius:8px;padding:7px 9px}
 table{width:100%;border-collapse:collapse;font-size:12.5px}
 th{background:#F0F3F8;text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;color:#5A6478;position:sticky;top:0}
 td{padding:6px 8px;border-bottom:1px solid #F0F2F6;vertical-align:top}
@@ -28,11 +29,17 @@ tr.err td{background:#FDF2F1}
 #login{max-width:360px;margin:60px auto}
 label{display:block;font-size:11px;font-weight:700;color:#5A6478;margin:10px 0 3px;text-transform:uppercase}
 .pill{display:inline-block;background:#EEF1F6;border-radius:9px;padding:1px 7px;font-size:11px;margin:1px}
-.neg{background:#FBE9E7;color:#8E2F23}
+.gold{background:#E8F6EF;color:#14532D;font-weight:600}
+.warn{background:#FFF4E0;color:#7A4E0F}
+.neutral{background:#F0F0F3;color:#6B7280}
+.modal-bg{position:fixed;inset:0;background:rgba(10,20,40,.55);display:none;align-items:center;justify-content:center;z-index:2000}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:14px;width:min(860px,96vw);max-height:94vh;overflow-y:auto;padding:16px 18px}
+#pano{width:100%;height:420px;border-radius:10px;background:#E8EDF3}
 </style>
 </head>
 <body>
-<header><div class="brand">Grid<b>Retail</b></div><div style="font-size:13px;color:#93A3C4">Análisis de entorno comercial — cosecha Google Places (Fase 1)</div>
+<header><div class="brand">Grid<b>Retail</b></div><div style="font-size:13px;color:#93A3C4">Análisis de entorno — cosecha Google Places + validación Street View</div>
 <div style="flex:1"></div><a href="index.html" style="color:#93A3C4;font-size:12.5px">← volver a la app</a></header>
 <main>
 <div id="login" class="card">
@@ -45,16 +52,20 @@ label{display:block;font-size:11px;font-weight:700;color:#5A6478;margin:10px 0 3
 
 <div id="app" style="display:none">
 <div class="card">
-  <b>API key de Google Maps</b> <span class="muted">(se guarda compartida en la base; solo se configura una vez)</span>
+  <b>API key de Google Maps</b> <span class="muted">(compartida; solo admin la escribe. Requiere: Maps JavaScript API + Places API; para la validación visual, la key también debe permitir Street View — viene con Maps JS)</span>
   <div style="display:flex;gap:8px;margin-top:8px">
     <input id="gkey" style="flex:1" placeholder="AIza…">
     <button onclick="saveKey()">Guardar</button>
   </div>
-  <div class="muted" style="margin-top:6px">La key debe tener habilitadas <b>Maps JavaScript API</b> y <b>Places API</b>, con restricción de sitio web a tu dominio de GitHub Pages.</div>
 </div>
 <div class="card">
-  <b>Cosecha</b> — por cada punto se consultan 12 categorías en un radio de 250 m y se separan en ≤100 m (microcluster) y 100-250 m.
-  <span class="muted">Costo aprox.: US$0.38 por punto (~US$35 los 92 puntos, dentro del crédito gratuito mensual de Google). La cosecha es reanudable: los puntos ya cosechados se saltan.</span>
+  <b>Cosecha v2</b> — 13 búsquedas por punto en radio 250 m, separadas en ≤100 m / 100-250 m, con clasificación por marca:
+  <div style="margin-top:6px" class="muted">
+  <span class="pill gold">Cadenas fuertes = señal de zona consolidada:</span> farmacias de cadena (InkaFarma/MiFarma/Boticas y Salud/Boticas Perú), conveniencia (Tambo/Mass/OXXO/Listo/3A), bancos, supermercados ·
+  <span class="pill warn">Solo particulares (sin cadenas) = zona incipiente</span> ·
+  <span class="pill neutral">Neutros, la calibración decide su signo:</span> repuestos, ferreterías, restaurantes ·
+  Apuestas/lotería agrupa La Tinka + Apuesta Total + Te Apuesto y similares.
+  </div>
   <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <select id="scope">
       <option value="tex">Tiendas TEX vigentes</option>
@@ -64,38 +75,94 @@ label{display:block;font-size:11px;font-weight:700;color:#5A6478;margin:10px 0 3
     <label style="display:inline;margin:0;text-transform:none;font-weight:500"><input type="checkbox" id="recosechar" style="width:auto"> re-cosechar los ya hechos</label>
     <button class="primary" onclick="cargar()">1 · Cargar puntos</button>
     <button class="accent" id="btnrun" onclick="cosechar()" disabled>2 · Cosechar entorno</button>
-    <button id="btnexp" onclick="exportarP1()" disabled>3 · Exportar lote para P1 (modelo económico)</button>
+    <button id="btnexp" onclick="exportarP1()" disabled>3 · Exportar lote para P1</button>
     <span id="status" class="muted"></span>
   </div>
   <div id="bar"><i></i></div>
 </div>
-<div class="card" style="max-height:60vh;overflow:auto">
-  <table><thead><tr><th style="min-width:180px">Punto</th><th>Venta SS (may-jun)</th><th>≤100 m</th><th>100-250 m</th><th>Estado</th></tr></thead>
+<div class="card" style="max-height:58vh;overflow:auto">
+  <table><thead><tr><th style="min-width:170px">Punto</th><th>SS</th><th>≤100 m</th><th>100-250 m</th><th>Estado</th><th></th></tr></thead>
   <tbody id="tb"></tbody></table>
 </div>
 </div>
+
+<!-- Modal Street View -->
+<div class="modal-bg" id="mSV"><div class="modal">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <b id="svTitulo">Street View</b>
+    <button class="mini" onclick="cerrarSV()">✕ cerrar</button>
+  </div>
+  <div class="muted" style="margin:4px 0 8px">Gira la vista para recorrer la cuadra (arrastra; flechas para avanzar). Ojo: la imagen puede tener 1-3 años de antigüedad — úsala como referencia, no como verdad absoluta.</div>
+  <div id="pano"></div>
+  <label>Nota visual (qué ves: giros comerciales reales, lado bueno/malo de la cuadra, negocios que Google no registra…)</label>
+  <textarea id="svNota" rows="3" style="width:100%"></textarea>
+  <div style="margin-top:8px;display:flex;gap:8px">
+    <button class="accent" onclick="guardarNota()">Guardar nota visual</button>
+    <span id="svMsg" class="muted"></span>
+  </div>
+</div></div>
 </main>
 <script>
 "use strict";
 const CFG = window.GRIDRETAIL_CONFIG;
 const sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
-let puntos = [], gmapsReady = false, GKEY = '';
+let puntos = [], gmapsReady = false, GKEY = '', svPano = null;
 
-// 12 categorias: 'type' usa tipos de Places; 'kw' usa busqueda por palabra; neg = indicador negativo
-const CATS = [
-  {id:'banco',        type:'bank',              label:'Banco'},
-  {id:'farmacia',     type:'pharmacy',          label:'Farmacia'},
-  {id:'conveniencia', type:'convenience_store', label:'Tambo/Mass/OXXO'},
-  {id:'supermercado', type:'supermarket',       label:'Supermercado'},
-  {id:'mercado',      kw:'mercado',             label:'Mercado'},
-  {id:'tinka',        kw:'tinka',               label:'La Tinka'},
-  {id:'paradero',     type:'transit_station',   label:'Paradero/estación'},
-  {id:'celulares',    kw:'celulares',           label:'Tiendas de celulares'},
-  {id:'galeria',      kw:'galeria comercial',   label:'Galería'},
-  {id:'comida',       type:'restaurant',        label:'Restaurantes'},
-  {id:'neg_repuestos',kw:'repuestos',           label:'Repuestos (−)', neg:true},
-  {id:'neg_ferreteria',kw:'ferreteria',         label:'Ferretería (−)', neg:true},
+/* ---- 13 busquedas crudas por punto ---- */
+const RAW = [
+  {id:'banco',      type:'bank'},
+  {id:'farmacia',   type:'pharmacy'},
+  {id:'conveniencia', type:'convenience_store'},
+  {id:'supermercado', type:'supermarket'},
+  {id:'mercado',    kw:'mercado'},
+  {id:'tinka',      kw:'tinka'},
+  {id:'apuestas',   kw:'apuestas'},
+  {id:'paradero',   type:'transit_station'},
+  {id:'celulares',  kw:'celulares'},
+  {id:'galeria',    kw:'galeria comercial'},
+  {id:'comida',     type:'restaurant'},
+  {id:'repuestos',  kw:'repuestos'},
+  {id:'ferreteria', kw:'ferreteria'},
 ];
+/* ---- clasificacion por marca (nombre en minusculas) ---- */
+const MARCAS = {
+  farm_cadena: ['inkafarma','inka farma','mifarma','mi farma','boticas y salud','boticas peru','boticas perú','farmacias peruanas','universal'],
+  conv_cadena: ['tambo','mass','oxxo','listo','3a','minimarket 3a'],
+};
+function esMarca(nombre, lista){ const n=(nombre||'').toLowerCase(); return lista.some(m=>n.includes(m)); }
+/* categorias DERIVADAS que se guardan en resumen y alimentan P1/calibracion */
+const DERIVADAS = [
+  {id:'banco',        label:'Banco',            css:'gold'},
+  {id:'farm_cadena',  label:'Farmacia cadena',  css:'gold'},
+  {id:'farm_indep',   label:'Farmacia partic.', css:'warn'},
+  {id:'conv_cadena',  label:'Tambo/Mass/OXXO/3A', css:'gold'},
+  {id:'conv_bodega',  label:'Minimarket local', css:'neutral'},
+  {id:'supermercado', label:'Supermercado',     css:'gold'},
+  {id:'mercado',      label:'Mercado',          css:'gold'},
+  {id:'apuestas',     label:'Tinka/apuestas',   css:'gold'},
+  {id:'paradero',     label:'Paradero',         css:'gold'},
+  {id:'celulares',    label:'Celulares',        css:''},
+  {id:'galeria',      label:'Galería',          css:''},
+  {id:'comida',       label:'Restaurantes',     css:'neutral'},
+  {id:'repuestos',    label:'Repuestos ±',      css:'neutral'},
+  {id:'ferreteria',   label:'Ferretería ±',     css:'neutral'},
+];
+function derivar(detalle){
+  const out = {};
+  const push=(cat,item)=>{ (out[cat]=out[cat]||[]).push(item); };
+  for (const [cat, items] of Object.entries(detalle)){
+    if (!Array.isArray(items)) continue;
+    for (const it of items){
+      if (cat==='farmacia') push(esMarca(it.n, MARCAS.farm_cadena)?'farm_cadena':'farm_indep', it);
+      else if (cat==='conveniencia') push(esMarca(it.n, MARCAS.conv_cadena)?'conv_cadena':'conv_bodega', it);
+      else if (cat==='tinka' || cat==='apuestas') push('apuestas', it);
+      else push(cat, it);
+    }
+  }
+  // dedup apuestas por nombre+distancia
+  if (out.apuestas){ const seen=new Set(); out.apuestas = out.apuestas.filter(x=>{const k=x.n+'|'+x.d; if(seen.has(k))return false; seen.add(k); return true;}); }
+  return out;
+}
 
 async function doLogin(){
   const { error } = await sb.auth.signInWithPassword({ email: document.getElementById('lemail').value.trim(), password: document.getElementById('lpass').value });
@@ -112,14 +179,14 @@ async function saveKey(){
   const k = document.getElementById('gkey').value.trim();
   if (!k.startsWith('AIza')){ alert('Esa no parece una API key de Google (empieza con AIza…)'); return; }
   const { error } = await sb.from('app_config').upsert({key:'google_maps_key', value: k});
-  if (error){ alert('No se pudo guardar (¿eres admin?): '+error.message); return; }
+  if (error){ alert('No se pudo guardar (¿eres admin? ¿corriste el parche de política ins_config?): '+error.message); return; }
   GKEY = k; alert('Key guardada.');
 }
 function loadGmaps(){
   return new Promise((res, rej)=>{
     if (gmapsReady) return res();
     if (!GKEY){ rej('Configura la API key primero.'); return; }
-    const key = typeof GKEY==='string' ? GKEY.replace(/"/g,'') : GKEY;
+    const key = String(GKEY).replace(/"/g,'');
     const s = document.createElement('script');
     s.src = 'https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&libraries=places&language=es&region=PE';
     s.onload = ()=>{ gmapsReady = true; res(); };
@@ -141,13 +208,18 @@ async function cargar(){
     const { data } = await sb.from('locales').select('id,nombre,lat,lon,estado');
     (data||[]).filter(l=>l.lat!=null && l.estado!=='descartado').forEach(l=>puntos.push({tipo:'local', id:String(l.id), nombre:'[LOCAL] '+l.nombre, lat:l.lat, lon:l.lon, ss:null}));
   }
-  const { data: hechos } = await sb.from('micro_entorno').select('punto_tipo,punto_id,resumen');
-  const done = new Map((hechos||[]).map(h=>[h.punto_tipo+':'+h.punto_id, h.resumen]));
-  puntos.forEach(p=>{ p.resumen = done.get(p.tipo+':'+p.id) || null; p.estado = p.resumen ? 'cosechado' : 'pendiente'; });
+  const { data: hechos } = await sb.from('micro_entorno').select('punto_tipo,punto_id,resumen,data');
+  const done = new Map((hechos||[]).map(h=>[h.punto_tipo+':'+h.punto_id, h]));
+  puntos.forEach(p=>{
+    const h = done.get(p.tipo+':'+p.id);
+    p.resumen = h ? h.resumen : null;
+    p.nota = h && h.data && h.data.visual ? h.data.visual.nota : '';
+    p.estado = p.resumen && Object.keys(p.resumen).length ? 'cosechado' : 'pendiente';
+  });
   render();
   document.getElementById('btnrun').disabled = !puntos.length;
   document.getElementById('btnexp').disabled = !puntos.some(p=>p.resumen);
-  document.getElementById('status').textContent = puntos.length+' puntos ('+puntos.filter(p=>p.resumen).length+' ya cosechados)';
+  document.getElementById('status').textContent = puntos.length+' puntos ('+puntos.filter(p=>p.resumen && Object.keys(p.resumen).length).length+' ya cosechados)';
 }
 
 function nearby(svc, lat, lon, cat){
@@ -165,31 +237,37 @@ async function cosechar(){
   try { await loadGmaps(); } catch(e){ alert(e); return; }
   const svc = new google.maps.places.PlacesService(document.createElement('div'));
   const re = document.getElementById('recosechar').checked;
-  const lista = puntos.filter(p=>re || !p.resumen);
+  const lista = puntos.filter(p=>re || !p.resumen || !Object.keys(p.resumen).length);
   document.getElementById('btnrun').disabled = true;
   let i = 0;
   for (const p of lista){
     i++;
     document.getElementById('status').textContent = 'Cosechando '+i+' de '+lista.length+': '+p.nombre;
     document.querySelector('#bar i').style.width = Math.round(i/lista.length*100)+'%';
-    const resumen = {r100:{}, r250:{}}, detalle = {};
+    const crudo = {};
     let fallo = false;
-    for (const cat of CATS){
+    for (const cat of RAW){
       let r = await nearby(svc, p.lat, p.lon, cat);
       if (!r.ok && r.status === 'OVER_QUERY_LIMIT'){ await new Promise(s=>setTimeout(s,2200)); r = await nearby(svc, p.lat, p.lon, cat); }
-      if (!r.ok){ fallo = true; detalle[cat.id] = {error: r.status}; continue; }
-      const items = r.results.map(x=>({
+      if (!r.ok){ fallo = true; crudo[cat.id] = {error: r.status}; continue; }
+      crudo[cat.id] = r.results.map(x=>({
         n: x.name, rating: x.rating||null, reviews: x.user_ratings_total||0,
         d: distM(p.lat, p.lon, x.geometry.location.lat(), x.geometry.location.lng()),
         tipos: (x.types||[]).slice(0,4)
       })).filter(x=>x.d<=260).sort((a,b)=>a.d-b.d).slice(0,20);
-      detalle[cat.id] = items;
-      resumen.r100[cat.id] = items.filter(x=>x.d<=100).length;
-      resumen.r250[cat.id] = items.filter(x=>x.d>100).length;
       await new Promise(s=>setTimeout(s,220));
     }
+    const detalle = derivar(crudo);
+    const resumen = {r100:{}, r250:{}};
+    for (const dcat of DERIVADAS){
+      const items = detalle[dcat.id]||[];
+      resumen.r100[dcat.id] = items.filter(x=>x.d<=100).length;
+      resumen.r250[dcat.id] = items.filter(x=>x.d>100).length;
+    }
+    const dataFull = {...detalle};
+    if (p.nota) dataFull.visual = {nota:p.nota};
     const rec = { punto_tipo:p.tipo, punto_id:p.id, nombre:p.nombre, lat:p.lat, lon:p.lon,
-      resumen, data:detalle, harvested_by:(await sb.auth.getUser()).data.user.email, updated_at:new Date().toISOString() };
+      resumen, data:dataFull, harvested_by:(await sb.auth.getUser()).data.user.email, updated_at:new Date().toISOString() };
     const { error } = await sb.from('micro_entorno').upsert(rec, {onConflict:'punto_tipo,punto_id'});
     p.resumen = resumen; p.estado = error ? ('error BD: '+error.message) : (fallo ? 'cosechado con huecos' : 'cosechado');
     render();
@@ -200,31 +278,70 @@ async function cosechar(){
 }
 
 function pills(res, radio){
-  if (!res) return '—';
-  return CATS.map(c=>{
-    const n = (res[radio]||{})[c.id]||0;
-    return n ? '<span class="pill'+(c.neg?' neg':'')+'">'+c.label+': '+n+'</span>' : '';
+  if (!res || !res[radio]) return '—';
+  return DERIVADAS.map(c=>{
+    const n = res[radio][c.id]||0;
+    return n ? '<span class="pill '+c.css+'">'+c.label+': '+n+'</span>' : '';
   }).join('') || '<span class="muted">nada</span>';
 }
 function render(){
-  document.getElementById('tb').innerHTML = puntos.map(p=>
+  document.getElementById('tb').innerHTML = puntos.map((p,i)=>
     '<tr class="'+(p.estado&&p.estado.startsWith('cosechado')?'done':(p.estado&&p.estado.startsWith('error')?'err':''))+'">'+
-    '<td><b>'+p.nombre.replace(/</g,'&lt;')+'</b><div class="muted">'+p.lat.toFixed(5)+', '+p.lon.toFixed(5)+'</div></td>'+
+    '<td><b>'+p.nombre.replace(/</g,'&lt;')+'</b><div class="muted">'+p.lat.toFixed(5)+', '+p.lon.toFixed(5)+(p.nota?' · 👁 con nota visual':'')+'</div></td>'+
     '<td>'+(p.ss!=null?p.ss+(p.fraude?' ⚠️':''):'—')+'</td>'+
     '<td>'+pills(p.resumen,'r100')+'</td>'+
     '<td>'+pills(p.resumen,'r250')+'</td>'+
-    '<td>'+(p.estado||'')+'</td></tr>').join('');
+    '<td>'+(p.estado||'')+'</td>'+
+    '<td><button class="mini" onclick="abrirSV('+i+')">👁 Ver cuadra</button></td></tr>').join('');
 }
 
-/* Exporta un JSON listo para pegar junto al prompt P1 en el modelo economico */
+/* ---------- Street View: validacion visual de la cuadra ---------- */
+async function abrirSV(i){
+  try { await loadGmaps(); } catch(e){ alert(e); return; }
+  mostrarSV(i);
+}
+function mostrarSV(i){
+  svpuntoIdx = i; svpunto2 = puntos[i];
+  document.getElementById('svTitulo').textContent = '👁 ' + svpunto2.nombre;
+  document.getElementById('svNota').value = svpunto2.nota || '';
+  document.getElementById('svMsg').textContent = '';
+  document.getElementById('mSV').classList.add('open');
+  svPano = new google.maps.StreetViewPanorama(document.getElementById('pano'), {
+    position: {lat: svpunto2.lat, lng: svpunto2.lon},
+    pov: {heading: 0, pitch: 0}, zoom: 0,
+    addressControl: true, motionTracking: false
+  });
+}
+let svpuntoIdx = null, svpunto2 = null;
+function cerrarSV(){ document.getElementById('mSV').classList.remove('open'); }
+async function guardarNota(){
+  const nota = document.getElementById('svNota').value.trim();
+  const p = svpunto2;
+  const { data: row } = await sb.from('micro_entorno').select('data').eq('punto_tipo',p.tipo).eq('punto_id',p.id).single();
+  const user = (await sb.auth.getUser()).data.user.email;
+  const visual = {nota, por:user, fecha:new Date().toISOString().slice(0,10)};
+  let error;
+  if (row){
+    ({ error } = await sb.from('micro_entorno').update({data: {...(row.data||{}), visual}, updated_at:new Date().toISOString()}).eq('punto_tipo',p.tipo).eq('punto_id',p.id));
+  } else {
+    ({ error } = await sb.from('micro_entorno').insert({punto_tipo:p.tipo, punto_id:p.id, nombre:p.nombre, lat:p.lat, lon:p.lon, resumen:{}, data:{visual}, harvested_by:user}));
+  }
+  if (error){ document.getElementById('svMsg').textContent = 'Error: '+error.message; return; }
+  p.nota = nota;
+  document.getElementById('svMsg').textContent = 'Nota guardada ✓';
+  render();
+}
+
+/* Exporta lote para P1 (incluye clasificacion por marca y notas visuales) */
 async function exportarP1(){
   const { data } = await sb.from('micro_entorno').select('*');
   const lote = (data||[]).map(m=>{
     const p = puntos.find(x=>x.tipo===m.punto_tipo && x.id===String(m.punto_id)) || {};
+    const split = (pred)=>Object.fromEntries(Object.entries(m.data||{}).filter(([k])=>k!=='visual').map(([k,v])=>[k, Array.isArray(v)?v.filter(pred):v]));
     return { nombre:m.nombre, lat:m.lat, lon:m.lon, tipo:m.punto_tipo,
       venta_ss_prom: p.ss ?? null, fraude: p.fraude||false,
-      negocios_100m: Object.fromEntries(Object.entries(m.data||{}).map(([k,v])=>[k, Array.isArray(v)?v.filter(x=>x.d<=100):v])),
-      negocios_100_250m: Object.fromEntries(Object.entries(m.data||{}).map(([k,v])=>[k, Array.isArray(v)?v.filter(x=>x.d>100):v])) };
+      nota_visual: (m.data && m.data.visual && m.data.visual.nota) || null,
+      negocios_100m: split(x=>x.d<=100), negocios_100_250m: split(x=>x.d>100) };
   });
   const blob = new Blob([JSON.stringify(lote, null, 1)], {type:'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
