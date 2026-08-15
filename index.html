@@ -525,8 +525,16 @@ function parseWsp(){
   if (mArea) set('f_area', String(mArea[1]).replace(',','.'));
   const mLink = t.match(/https?:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps|www\.google\.[a-z.]+\/maps|maps\.google\.[a-z.]+)[^\s]*/i);
   if (mLink){ set('f_link', mLink[0]);
-    const mC = mLink[0].match(/[@=](-?\d{1,2}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})/);
+    // prioridad: !3d!4d = pin exacto del lugar; q=lat,lon; la @ (centro de la vista) solo como ultimo recurso
+    const mC = mLink[0].match(/!3d(-?\d{1,2}\.\d{3,})!4d(-?\d{1,3}\.\d{3,})/)
+            || mLink[0].match(/[?&](?:q|ll|query|destination)=(-?\d{1,2}\.\d{3,})(?:%2C|,)\s*(-?\d{1,3}\.\d{3,})/i)
+            || mLink[0].match(/@(-?\d{1,2}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})/);
     if (mC){ set('f_lat', mC[1]); set('f_lon', mC[2]); }
+  }
+  // coordenada suelta pegada en el mensaje ("-12.046373, -77.030922")
+  if (!document.getElementById('f_lat').value){
+    const mXY = t.match(/(-1[0-3]\.\d{4,})[,;\s]+(-7[5-8]\.\d{4,})/);
+    if (mXY){ set('f_lat', mXY[1]); set('f_lon', mXY[2]); }
   }
   const mTel = t.match(/9\d{8}/); if (mTel) set('f_corredora', ((document.getElementById('f_corredora').value||'')+' '+mTel[0]).trim());
   const mDir = t.match(/(?:direcci[oó]n|ubicad[oa] en|se ubica en|Av\.|Jr\.|Calle|Mz\.?)[^\n]{5,80}/i);
