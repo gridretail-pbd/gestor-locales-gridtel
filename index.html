@@ -209,6 +209,12 @@ let map, layers = {}, selLocal = null, tab = 'locales';
 let layerOn = { locales:true, clusters:true, tex:false };
 let opOn = { Movistar:false, Claro:false, Bitel:false, Entel:false };
 let pickingCoord = false;
+let pickLocalId = null;
+function fijarEnMapa(){
+  pickLocalId = selLocal.id;
+  document.getElementById('map').style.cursor='crosshair';
+  toast('Haz clic en el mapa sobre la ubicación exacta del local…');
+}
 
 const ESTADOS = { recibido:'Recibido', evaluacion:'En evaluación', aceptado:'Aceptado', descartado:'Descartado', agencia:'Agencia PBD' };
 const ECOLOR = { recibido:'#8A93A6', evaluacion:'#B45309', aceptado:'#0B6BCB', descartado:'#C0392B', agencia:'#1A7F37' };
@@ -248,6 +254,8 @@ async function boot(){
     document.getElementById('login').style.display='none';
     me = {email:'demo@gridretail'}; myRol='admin';
     D.clusters=DEMO_DATA.clusters; D.tex=DEMO_DATA.tex; D.operadores=DEMO_DATA.operadores; D.locales=DEMO_DATA.locales;
+    D.clusters.forEach(c=>{ c.mejor_tienda = c.mejor_tienda || (c.nombre.includes('Huandoy')?'TE HUANDOY (demo)':'TE NARANJAL (demo)'); });
+    alignClusters();
     startApp(); return;
   }
   if (!CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY){
@@ -283,6 +291,22 @@ async function loadAll(){
   ]);
   D.clusters=c.data||[]; D.tex=t.data||[]; D.operadores=o.data||[]; D.locales=l.data||[];
   if (cfg.data) D.pesos = cfg.data.value;
+  alignClusters();
+}
+/* Ancla cada microcluster a su MEJOR tienda TEX (posicion viva: sigue las recalibraciones),
+   con respaldo en el centroide de sus tiendas vigentes. */
+function alignClusters(){
+  D.clusters.forEach(c=>{
+    const miembros = D.tex.filter(t=>t.cluster_nombre===c.nombre && t.lat!=null && !t.cerrada);
+    const ancla = miembros.find(t=>t.nombre===c.mejor_tienda) ||
+                  D.tex.find(t=>t.nombre===c.mejor_tienda && t.lat!=null);
+    if (ancla){ c.lat = ancla.lat; c.lon = ancla.lon; c._ancla = ancla.nombre; }
+    else if (miembros.length){
+      c.lat = miembros.reduce((s,t)=>s+t.lat,0)/miembros.length;
+      c.lon = miembros.reduce((s,t)=>s+t.lon,0)/miembros.length;
+      c._ancla = 'centroide de '+miembros.length+' tiendas';
+    }
+  });
 }
 function startApp(){
   document.getElementById('hdr').style.display='flex';
@@ -306,22 +330,40 @@ function initMap(){
   layers.clusters = L.layerGroup().addTo(map);
   layers.tex = L.layerGroup();
   layers.ops = L.layerGroup().addTo(map);
-  map.on('click', e=>{
-    if (pickingCoord){
+  map.on('zoomend', ()=>drawMap());
+  map.on('click', async e=>{
+    if (document.getElementById('mNuevo').classList.contains('open') && pickingCoord){
       document.getElementById('f_lat').value = e.latlng.lat.toFixed(6);
       document.getElementById('f_lon').value = e.latlng.lng.toFixed(6);
       toast('Ubicación fijada desde el mapa');
+      return;
+    }
+    if (pickLocalId){
+      const lc = D.locales.find(x=>String(x.id)===String(pickLocalId));
+      if (lc){
+        lc.lat = +e.latlng.lat.toFixed(6); lc.lon = +e.latlng.lng.toFixed(6);
+        if (!DEMO) await sb.from('locales').update({lat:lc.lat, lon:lc.lon, updated_at:new Date().toISOString()}).eq('id',lc.id);
+        await persistScore(lc);
+        pickLocalId = null; document.getElementById('map').style.cursor='';
+        toast('Ubicación del local fijada'); renderAll(); if(selLocal && selLocal.id===lc.id) renderPanel();
+      }
     }
   });
 }
 function renderAll(){ drawMap(); renderPanel(); }
 function drawMap(){
   layers.locales.clearLayers(); layers.clusters.clearLayers(); layers.tex.clearLayers(); layers.ops.clearLayers();
+  const zoomAlto = map.getZoom() >= 14;
   if (layerOn.clusters) D.clusters.forEach(c=>{
     if (c.lat==null) return;
+    // radio REAL del microcluster: 100 m alrededor del ancla (visible en zoom alto)
+    if (zoomAlto){
+      L.circle([c.lat,c.lon],{radius:100,color:recColor(c.recomendacion),weight:1.5,dashArray:'5 4',fillColor:recColor(c.recomendacion),fillOpacity:0.07,interactive:false})
+        .addTo(layers.clusters);
+    }
     const r = Math.max(7, Math.sqrt(Math.max(c.score||1,1))*1.4);
     L.circleMarker([c.lat,c.lon],{radius:r,color:'#fff',weight:1.4,fillColor:recColor(c.recomendacion),fillOpacity:.55})
-      .bindTooltip('<b>'+esc(c.nombre)+'</b><br>Score '+c.score+' · '+esc(c.recomendacion))
+      .bindTooltip('<b>'+esc(c.nombre)+'</b><br>Score '+c.score+' · '+esc(c.recomendacion)+(c._ancla?'<br><span style="color:#9aa">📍 ancla: '+esc(c._ancla)+' · radio micro: 100 m</span>':''))
       .addTo(layers.clusters);
   });
   if (layerOn.tex) D.tex.forEach(t=>{
@@ -381,8 +423,8 @@ function renderPanel(){
     h += '<div style="padding:9px 12px 3px;font-size:11px;font-weight:800;color:'+ECOLOR[est]+';letter-spacing:.05em;text-transform:uppercase">'+ESTADOS[est]+' <span class="count">'+items.length+'</span></div>';
     h += items.map(lc=>
       '<div class="row" onclick="openDetail(\''+lc.id+'\')"><span class="dot" style="background:'+ECOLOR[est]+'"></span><div style="flex:1">'+
-      '<div class="nm">'+esc(lc.nombre)+'</div>'+
-      '<div class="meta">'+esc(lc.distrito||'')+' · '+fmtS(lc.precio_soles)+'/mes'+(lc.area_m2?' · '+lc.area_m2+' m²':'')+(lc.score!=null?' · <b>score '+lc.score+'</b>':'')+'</div>'+
+      '<div class="nm">'+esc(lc.nombre)+(lc.lat==null?' <span style="color:#C0392B" title="sin ubicación en el mapa">📍✕</span>':'')+'</div>'+
+      '<div class="meta">'+esc(lc.distrito||'')+' · '+fmtS(lc.precio_soles)+'/mes'+(lc.area_m2?' · '+lc.area_m2+' m²':'')+(lc.score!=null?' · <b>score '+lc.score+'</b>':'')+(lc.lat==null?' · <span style="color:#C0392B">sin ubicación</span>':'')+'</div>'+
       '</div></div>').join('');
     if (!items.length) h += '<div style="padding:2px 12px 8px" class="muted">—</div>';
   }
@@ -425,7 +467,8 @@ function renderDetail(pb){
     '<button class="btn" onclick="selLocal=null;renderPanel();drawMap()">← Volver</button>'+
     '<h3 style="margin-top:10px">'+esc(lc.nombre)+'</h3>'+
     '<span class="badge" style="background:'+ECOLOR[lc.estado]+'">'+ESTADOS[lc.estado]+'</span> '+
-    '<span class="muted">'+esc(lc.distrito||'')+(lc.cluster_nombre?' · '+esc(lc.cluster_nombre):'')+'</span>'+
+    '<span class="muted">'+esc(lc.distrito||'')+(lc.cluster_nombre?' · '+esc(lc.cluster_nombre)+(lc._dist_ancla_m!=null?' (a '+lc._dist_ancla_m+' m del ancla'+(lc._dist_ancla_m<=100?' — dentro del microcluster ✓':'')+')':''):'')+'</span>'+
+    (lc.lat==null?'<div style="background:#FDF2F1;border:1px solid #EAC2BC;border-radius:8px;padding:8px 10px;margin-top:8px;font-size:12.5px;color:#8E2F23"><b>📍 Este local no tiene ubicación</b>, por eso no aparece en el mapa. Fíjala con el botón de abajo (clic en el mapa), o con "Editar datos" pegando el link/coordenada de Google Maps.<div class="btnrow"><button class="btn" onclick="fijarEnMapa()">📍 Fijar haciendo clic en el mapa</button></div></div>':'')+
     '<div class="scorebox"><div style="display:flex;align-items:baseline;gap:10px"><span class="big">'+(sc.total!=null?sc.total:'—')+'</span><span class="muted">score /100 · pesos: '+pesosStr()+'</span></div>'+
       sc.rows.map(r=>'<div class="sbar"><span style="width:118px">'+r[0]+'</span><span class="tr"><i style="width:'+r[1]+'%"></i></span><span style="width:30px;text-align:right">'+r[1]+'</span></div>').join('')+
     '</div>'+
@@ -461,13 +504,18 @@ function computeScore(lc){
   if (lc.lat!=null){
     let best=null, bd=1e9;
     D.clusters.forEach(c=>{ if(c.lat==null)return; const d=distKm(lc.lat,lc.lon,c.lat,c.lon); if(d<bd){bd=d;best=c;} });
-    const clusterScore = (best && bd<4) ? Number(best.score)||50 : 40;
-    let bestTex = 0;
+    // decaimiento por distancia al ancla: microcluster = 100 m; fuera de 2 km la zona pesa poco
+    const wCl = bd<=0.1 ? 1 : bd<=0.3 ? 0.85 : bd<=1 ? 0.65 : bd<=2 ? 0.5 : bd<=4 ? 0.35 : 0;
+    const clusterScore = best && wCl>0 ? Math.min(100, 40 + ((Number(best.score)||50) - 40)*wCl) : 40;
+    let bestTexEff = 0;
     D.tex.forEach(t=>{ if(t.lat==null||t.cerrada)return; const d=distKm(lc.lat,lc.lon,t.lat,t.lon);
-      if(d<0.5){ let v=((t.ss_mayo||0)+(t.ss_junio||0))/2; if(t.fraude)v*=0.55; bestTex=Math.max(bestTex,v);} });
-    texN = Math.min(100, bestTex/200*100);
-    entorno = Math.round(0.6*clusterScore + 0.4*(bestTex>0?texN:clusterScore));
-    if (best && bd<4) lc.cluster_nombre = best.nombre;
+      if(d<0.5){ let v=((t.ss_mayo||0)+(t.ss_junio||0))/2; if(t.fraude)v*=0.55;
+        const wT = d<=0.15 ? 1 : 0.6;   // dentro del microcluster real vs. referencia del eje
+        bestTexEff=Math.max(bestTexEff, v*wT);} });
+    texN = Math.min(100, bestTexEff/200*100);
+    entorno = Math.min(100, Math.round(0.6*clusterScore + 0.4*(bestTexEff>0?texN:clusterScore)));
+    lc.cluster_nombre = (best && bd<4) ? best.nombre : null;
+    lc._dist_ancla_m = best ? Math.round(bd*1000) : null;
   }
   // 2) trafico
   let traf = null;
